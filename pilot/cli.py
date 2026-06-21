@@ -92,6 +92,31 @@ async def _demo(args) -> int:
     return 0 if result.ok else 1
 
 
+def _ml(args) -> int:
+    """ML foreground: the engine produces the result; Ollama only plans."""
+    from .ml.orchestrator import run_ml_goal
+
+    def on_event(ev: dict) -> None:
+        kind = ev.get("event")
+        if kind == "workspace":
+            print(f"  workspace: {ev['path']}")
+        elif kind == "data":
+            note = f" ({ev['note']})" if ev.get("note") else ""
+            print(f"  data: {ev['source']} — {ev['rows']}x{ev['cols']}{note}")
+        elif kind == "plan":
+            print(f"  plan [{ev['planner']}]: {ev['spec']}")
+        elif kind == "result":
+            print(f"  result: {ev['model']} -> {ev['headline']}")
+
+    result, ws = run_ml_goal(
+        args.goal, data_path=args.data, target=args.target, planner=args.planner,
+        on_event=on_event,
+    )
+    print(f"\nOK: {result.task_type} — {result.headline()}")
+    print(f"  report: {ws.path / 'report.md'}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pilot", description="Personal browser automation.")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -113,6 +138,13 @@ def main(argv: list[str] | None = None) -> int:
     p_demo = sub.add_parser("demo", help="offline end-to-end demo (no network/API)")
     p_demo.add_argument("--headless", action="store_true", default=True)
 
+    p_ml = sub.add_parser("ml", help="run an ML goal (ML foreground, Ollama background)")
+    p_ml.add_argument("goal", help='natural-language goal, e.g. "classify iris species"')
+    p_ml.add_argument("--data", default=None, help="path to a CSV (omit to use a bundled sample)")
+    p_ml.add_argument("--target", default=None, help="target column to predict")
+    p_ml.add_argument("--planner", default="auto", choices=["auto", "ollama", "heuristic"],
+                      help="auto = Ollama if reachable, else heuristic (no AI)")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "serve":
@@ -124,6 +156,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_run_task(args))
     if args.cmd == "demo":
         return asyncio.run(_demo(args))
+    if args.cmd == "ml":
+        return _ml(args)
     return 1
 
 

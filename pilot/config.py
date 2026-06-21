@@ -20,6 +20,8 @@ PROFILES_DIR = ROOT / "profiles"
 RUNS_DIR = ROOT / "runs"
 RECIPES_DIR = ROOT / "recipes"
 TASKS_DIR = ROOT / "tasks"
+# Each ML goal gets its own isolated workspace under here.
+ML_WORKSPACES_DIR = ROOT / "ml_workspaces"
 
 DEFAULT_PROFILE = PROFILES_DIR / "default"
 
@@ -58,7 +60,7 @@ class Settings:
     run_dir: Path | None = None
 
     def ensure_dirs(self) -> None:
-        for d in (PROFILES_DIR, RUNS_DIR, RECIPES_DIR):
+        for d in (PROFILES_DIR, RUNS_DIR, RECIPES_DIR, ML_WORKSPACES_DIR):
             d.mkdir(parents=True, exist_ok=True)
 
 

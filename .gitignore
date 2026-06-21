@@ -3,6 +3,8 @@
 profiles/
 # Run artifacts: screenshots, extracted text, generated reports.
 runs/
+# Per-goal ML workspaces (data snapshots, model artifacts, results).
+ml_workspaces/
 # Any secrets / API keys.
 .env
 .env.*
