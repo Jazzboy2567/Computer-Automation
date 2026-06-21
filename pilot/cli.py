@@ -50,6 +50,7 @@ async def _run_task(args) -> int:
         approval_mode=ApprovalMode(args.approval),
         provider=args.provider or task.provider or "stub",
         action_delay=args.delay,
+        model=args.model,
     )
     approval = None if settings.approval_mode is ApprovalMode.AUTONOMOUS else _terminal_approval
     result, paths = await run_task(
@@ -102,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     p_run = sub.add_parser("run", help="run a task from the terminal")
     p_run.add_argument("task", help="path to a tasks/*.json file (or a bare filename)")
     p_run.add_argument("--provider", default=None, help="stub|anthropic|openai|local")
+    p_run.add_argument("--model", default=None, help="model id override, e.g. claude-sonnet-4-6")
     p_run.add_argument("--approval", default="checkpoint",
                        choices=[m.value for m in ApprovalMode])
     p_run.add_argument("--headless", action="store_true")

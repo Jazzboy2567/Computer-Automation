@@ -35,6 +35,11 @@ def build_provider_for(task: Task, settings: Settings) -> Provider:
     name = task.provider or settings.provider
     if task.script is not None and name in (None, "stub"):
         return get_provider("stub", script=task.script)
+    # A runtime override (settings, from CLI/UI) wins over the task's model,
+    # which wins over the provider's built-in default.
+    model = settings.model or task.model
+    if model:
+        return get_provider(name, model=model)
     return get_provider(name)
 
 

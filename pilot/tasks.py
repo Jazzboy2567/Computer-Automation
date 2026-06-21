@@ -31,6 +31,7 @@ class Task(BaseModel):
     # Sort spec, e.g. ["price:asc", "in_stock:desc"] or ["match:desc"].
     sort: list[str] = Field(default_factory=list)
     provider: Optional[str] = None        # override default provider
+    model: Optional[str] = None           # override model id, e.g. "claude-sonnet-4-6"
     recipe: Optional[str] = None          # recipe name to record/replay
     # Optional scripted actions => the task can run fully offline via StubProvider.
     script: Optional[list[dict[str, Any]]] = None

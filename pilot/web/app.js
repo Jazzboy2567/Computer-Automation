@@ -172,6 +172,7 @@ $("btn-start").addEventListener("click", async () => {
     goal: $("goal").value || null,
     start_url: $("start-url").value || null,
     provider: $("provider").value,
+    model: $("model").value || null,
     approval_mode: $("approval").value,
     headed: $("headed").checked,
     action_delay: parseFloat($("delay").value) || 0,

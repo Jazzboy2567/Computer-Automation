@@ -83,6 +83,7 @@ class StartBody(BaseModel):
     start_url: Optional[str] = None     # optional first navigation for ad-hoc goals
     approval_mode: str = "checkpoint"
     provider: str = "stub"
+    model: Optional[str] = None          # model id override; None = provider default
     headed: bool = True
     action_delay: float = 0.0
 
@@ -176,6 +177,7 @@ async def start_run(body: StartBody) -> JSONResponse:
         headed=body.headed,
         approval_mode=mode,
         provider=body.provider,
+        model=body.model,
         action_delay=body.action_delay,
     )
 
@@ -191,9 +193,8 @@ async def _run(task: Task, settings: Settings, body: StartBody) -> None:
     from .agent import Agent
     from .browser import Browser
     from .output import write_run_outputs
-    from .providers import get_provider
     from .recipes import RecipeStore, build_recipe
-    from .runner import new_run_dir
+    from .runner import build_provider_for, new_run_dir
 
     settings.ensure_dirs()
     settings.run_dir = new_run_dir()
@@ -204,10 +205,7 @@ async def _run(task: Task, settings: Settings, body: StartBody) -> None:
         if body.goal and body.start_url:
             await browser.goto(body.start_url)
 
-        if task.script is not None and (task.provider or settings.provider) in (None, "stub"):
-            provider = get_provider("stub", script=task.script)
-        else:
-            provider = get_provider(task.provider or settings.provider)
+        provider = build_provider_for(task, settings)
 
         agent = Agent(browser, provider, settings,
                       on_event=SESSION.emit, approval=SESSION.approval)
