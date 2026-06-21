@@ -16,8 +16,8 @@ install:                       ## create venv + install deps + Chromium
 		python -m pip install -U pip && python -m pip install -e ".[dev]" && \
 		python -m playwright install chromium
 
-install-uv:                    ## same, using uv
-	uv venv
+install-uv:                    ## same, using uv (pins Python 3.13 for Playwright)
+	uv venv --python 3.13
 	uv pip install -e ".[dev]"
 	uv run playwright install chromium
 
