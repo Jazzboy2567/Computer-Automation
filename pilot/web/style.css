@@ -1,0 +1,135 @@
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-2: #273449;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-2: #0ea5e9;
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --border: #334155;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+header h1 { margin: 0; font-size: 22px; }
+.tagline { color: var(--muted); font-size: 13px; }
+
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.panel h2 { margin: 0 0 12px; font-size: 16px; }
+.panel.grow { min-height: 420px; }
+
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.field label { font-size: 12px; color: var(--muted); }
+.check-field { justify-content: flex-end; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.row .field { flex: 1; min-width: 140px; }
+
+input, select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 14px;
+}
+input[type="checkbox"] { width: auto; }
+
+.controls { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary { background: var(--accent-2); border-color: var(--accent-2); color: #04293b; font-weight: 600; }
+button.danger { background: #3b1717; border-color: var(--danger); color: #fecaca; }
+
+.pill {
+  font-size: 12px; padding: 2px 10px; border-radius: 999px; margin-left: 8px;
+  vertical-align: middle;
+}
+.pill.idle { background: #334155; color: var(--muted); }
+.pill.running { background: #064e3b; color: var(--ok); }
+.pill.paused { background: #422006; color: var(--warn); }
+.pill.done { background: #0c4a6e; color: var(--accent); }
+.pill.error { background: #3b1717; color: var(--danger); }
+
+.risk-badge {
+  font-size: 11px; background: var(--danger); color: #fff;
+  padding: 2px 8px; border-radius: 6px; margin-left: 6px;
+}
+
+.split { display: flex; gap: 16px; }
+.log {
+  flex: 1; min-height: 360px; max-height: 520px; overflow-y: auto;
+  background: #0b1220; border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px; font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12.5px; line-height: 1.5;
+}
+.log .entry { padding: 2px 0; border-bottom: 1px solid #11203a; }
+.log .e-decision { color: var(--accent); }
+.log .e-executed { color: var(--ok); }
+.log .e-error { color: var(--danger); }
+.log .e-approval { color: var(--warn); }
+.log .e-perception { color: var(--muted); }
+
+.shot { flex: 1; }
+.shot img {
+  width: 100%; border: 1px solid var(--border); border-radius: 8px;
+  background: #0b1220; min-height: 200px; object-fit: contain;
+}
+.report {
+  margin-top: 12px; background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px; font-size: 13px;
+}
+.report a { color: var(--accent); }
+
+.overlay {
+  position: fixed; inset: 0; background: rgba(2, 6, 23, 0.85);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+}
+.modal {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px; max-width: 560px; line-height: 1.5;
+}
+.modal h2 { margin-top: 0; }
+.modal ul { color: var(--text); padding-left: 18px; }
+.modal .check { display: flex; gap: 8px; align-items: flex-start; margin: 16px 0; color: var(--muted); }
+.hidden { display: none !important; }

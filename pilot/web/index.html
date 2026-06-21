@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pilot — personal browser automation</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- First-run responsible-use notice (gates all runs). -->
+  <div id="ack-overlay" class="overlay hidden">
+    <div class="modal">
+      <h2>Before you start</h2>
+      <p>Pilot drives <strong>your</strong> browser using <strong>your</strong> own
+         logged-in sessions and acts on your behalf.</p>
+      <ul>
+        <li>Automated access may violate some sites' Terms of Service and could
+            put your accounts at risk of restriction.</li>
+        <li><strong>You</strong> are responsible for which sites you target and
+            what you do there.</li>
+        <li>Pilot never handles passwords — you log in manually. It ships no
+            anti-bot evasion and will <strong>pause for you</strong> on a CAPTCHA
+            or bot check rather than attempt to solve it.</li>
+        <li><code>risk</code> actions (spending money, submitting, deleting,
+            changing settings) pause for your approval by default.</li>
+      </ul>
+      <label class="check">
+        <input type="checkbox" id="ack-check" />
+        I understand and accept responsibility for how I use Pilot.
+      </label>
+      <button id="ack-accept" disabled>Start using Pilot</button>
+    </div>
+  </div>
+
+  <header>
+    <h1>✈️ Pilot</h1>
+    <span class="tagline">personal, local browser automation</span>
+  </header>
+
+  <main>
+    <section class="panel" id="setup">
+      <h2>Run a task</h2>
+
+      <div class="field">
+        <label for="task-select">Saved task</label>
+        <select id="task-select"><option value="">— ad-hoc goal —</option></select>
+      </div>
+
+      <div class="field" id="goal-field">
+        <label for="goal">Goal (ad-hoc)</label>
+        <input type="text" id="goal" placeholder="e.g. List the 5 cheapest books and their prices" />
+      </div>
+      <div class="field" id="url-field">
+        <label for="start-url">Start URL (optional)</label>
+        <input type="text" id="start-url" placeholder="https://books.toscrape.com" />
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="provider">Provider</label>
+          <select id="provider">
+            <option value="stub">stub (no API)</option>
+            <option value="anthropic">anthropic</option>
+            <option value="openai">openai</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="approval">Approval mode</label>
+          <select id="approval">
+            <option value="checkpoint" selected>checkpoint (pause on risk)</option>
+            <option value="autonomous">autonomous</option>
+            <option value="step">step (confirm each)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="delay">Delay (s)</label>
+          <input type="number" id="delay" value="0" min="0" step="0.5" />
+        </div>
+        <div class="field check-field">
+          <label><input type="checkbox" id="headed" checked /> Headed</label>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="btn-start" class="primary">▶ Start</button>
+        <button id="btn-pause" disabled>⏸ Pause</button>
+        <button id="btn-resume" disabled>▶ Resume</button>
+        <button id="btn-stop" class="danger" disabled>■ Kill</button>
+      </div>
+    </section>
+
+    <section class="panel" id="approval-panel" class="hidden">
+      <h2>Approval required <span class="risk-badge">risk</span></h2>
+      <p id="approval-text">—</p>
+      <div class="controls">
+        <button id="btn-approve" class="primary">✓ Approve</button>
+        <button id="btn-decline" class="danger">✗ Decline</button>
+      </div>
+    </section>
+
+    <section class="panel grow">
+      <h2>Live activity <span id="status-pill" class="pill idle">idle</span></h2>
+      <div class="split">
+        <div id="log" class="log"></div>
+        <div class="shot">
+          <img id="screenshot" alt="latest screenshot" />
+          <div id="report" class="report hidden"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
