@@ -101,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_run = sub.add_parser("run", help="run a task from the terminal")
     p_run.add_argument("task", help="path to a tasks/*.json file (or a bare filename)")
-    p_run.add_argument("--provider", default=None, help="stub|anthropic|openai")
+    p_run.add_argument("--provider", default=None, help="stub|anthropic|openai|local")
     p_run.add_argument("--approval", default="checkpoint",
                        choices=[m.value for m in ApprovalMode])
     p_run.add_argument("--headless", action="store_true")

@@ -28,6 +28,10 @@ def get_provider(name: str, **kwargs) -> Provider:
         from .openai_provider import OpenAIProvider
 
         return OpenAIProvider(**kwargs)
+    if name == "local":
+        from .local_provider import LocalProvider
+
+        return LocalProvider(**kwargs)
     raise ValueError(f"Unknown provider: {name!r}")
 
 

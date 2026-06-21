@@ -26,7 +26,8 @@ particular site.
   money, submitting, deleting, changing settings) pause for your approval.
 - **Recipes** — the first successful run is recorded; later runs **replay
   deterministically with zero model calls** (fast, free, rate-limit-proof).
-- **Swappable providers** — Stub (no API), Anthropic (default), OpenAI.
+- **Swappable providers** — Stub (no API), Anthropic (default), OpenAI, and
+  **local (Ollama)** for a fully-local, no-API-key model.
 - **Plain-code comparison** — ranking/sorting is done in code, not by a model.
 - **Web UI + CLI** — drive it and watch it work, or script it from a terminal.
 
@@ -243,6 +244,23 @@ new provider only formats requests for its API — the action vocabulary is shar
 Register it in `pilot/providers/__init__.py::get_provider`. API keys are read from
 the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) **at call time** and are
 never stored.
+
+### Local LLM (Ollama) — no cloud, no API key
+
+For a fully-local model, install [Ollama](https://ollama.com), pull a model, and
+select the `local` provider:
+
+```bash
+ollama pull llama3.1            # or any chat/vision-capable model
+python -m pilot.cli run tasks/jobs_gather.json --provider local
+```
+
+It talks to Ollama over HTTP (no extra Python dependency). Configure with
+`OLLAMA_HOST` (default `http://localhost:11434`) and `OLLAMA_MODEL` (default
+`llama3.1`). Nothing leaves your machine. Note that small local models are less
+reliable than the cloud models at grounding (picking the right element ref) and
+at emitting valid action JSON — recipes still cover the repeatable common path
+with no model at all.
 
 ---
 
