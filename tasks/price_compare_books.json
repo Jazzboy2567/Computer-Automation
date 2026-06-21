@@ -1,0 +1,26 @@
+{
+  "name": "Price-compare books (demo)",
+  "goal": "Collect every book's title, price and stock from the catalog, then rank cheapest first.",
+  "sites": ["https://books.toscrape.com/"],
+  "keywords": ["price", "stock"],
+  "output_schema": ["title", "price", "in_stock", "url"],
+  "sort": ["price:asc"],
+  "provider": "stub",
+  "recipe": "books-demo",
+  "script": [
+    {"type": "goto", "url": "https://books.toscrape.com/", "reasoning": "open the catalog"},
+    {
+      "type": "extract",
+      "selector": "article.product_pod",
+      "fields": {
+        "title": "h3 a@title",
+        "price": "p.price_color",
+        "url": "h3 a@href",
+        "in_stock": "p.instock.availability"
+      },
+      "store_as": "books",
+      "reasoning": "extract each product's title, price, stock and link"
+    },
+    {"type": "done", "done": true, "reasoning": "collected all products on the page"}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Job-listing gather + rank",
+  "goal": "Gather current job listings (title, company, location and a link) from the listing page, then rank them by how well they match my keywords.",
+  "sites": ["https://news.ycombinator.com/jobs"],
+  "keywords": ["python", "backend", "remote", "senior", "infrastructure"],
+  "output_schema": ["title", "company", "location", "url"],
+  "sort": ["match:desc"],
+  "provider": "anthropic",
+  "recipe": "jobs-hn",
+  "_notes": "Public, automation-friendly listing page. Requires ANTHROPIC_API_KEY. Ranking is done in plain code by keyword-match score (no model). Swap in any job board and the model will adapt extraction on the first run."
+}
