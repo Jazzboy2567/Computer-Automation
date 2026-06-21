@@ -3,6 +3,10 @@
 
 const $ = (id) => document.getElementById(id);
 const api = (path, opts) => fetch(path, opts).then((r) => r.json());
+const esc = (s) =>
+  String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
+  );
 
 let evtSource = null;
 
@@ -43,16 +47,36 @@ $("task-select").addEventListener("change", (e) => {
 // ----------------------------------------------------------------- UI helpers
 function setStatus(label, cls) {
   const pill = $("status-pill");
-  pill.textContent = label;
   pill.className = "pill " + cls;
+  pill.querySelector(".label").textContent = label;
 }
-function logEntry(text, cls) {
-  const div = document.createElement("div");
-  div.className = "entry " + (cls || "");
-  div.textContent = text;
+function setMeta(text) {
+  $("activity-meta").textContent = text || "";
+}
+function logEntry(text, cls, icon) {
   const log = $("log");
-  log.appendChild(div);
+  const empty = log.querySelector(".log-empty");
+  if (empty) empty.remove();
+  const row = document.createElement("div");
+  row.className = "entry " + (cls || "");
+  const i = document.createElement("span");
+  i.className = "entry-icon";
+  i.textContent = icon || "·";
+  const t = document.createElement("span");
+  t.className = "entry-text";
+  t.textContent = text;
+  row.append(i, t);
+  log.appendChild(row);
   log.scrollTop = log.scrollHeight;
+}
+function setScreenshot(url, src) {
+  if (src) {
+    const img = $("screenshot");
+    img.src = src;
+    img.classList.add("show");
+    $("shot-empty").classList.add("hidden");
+  }
+  if (url) $("shot-url").textContent = url;
 }
 function setRunning(running) {
   $("btn-start").disabled = running;
@@ -71,40 +95,43 @@ function connectEvents() {
 function handleEvent(ev) {
   switch (ev.event) {
     case "perception":
-      logEntry(`· step ${ev.step}: perceived ${ev.elements} elements [${ev.mode}] ${ev.url}`, "e-perception");
-      if (ev.screenshot) {
-        $("screenshot").src = `/api/screenshot?path=${encodeURIComponent(ev.screenshot)}&t=${Date.now()}`;
-      }
+      logEntry(`step ${ev.step}: perceived ${ev.elements} elements [${ev.mode}]`, "e-perception", "◍");
+      setMeta(`step ${ev.step} · ${ev.mode}`);
+      if (ev.screenshot)
+        setScreenshot(ev.url, `/api/screenshot?path=${encodeURIComponent(ev.screenshot)}&t=${Date.now()}`);
+      else setScreenshot(ev.url);
       break;
     case "decision":
-      logEntry(`→ step ${ev.step}: ${ev.summary}  [${ev.risk}]  ${ev.reasoning || ""}`, "e-decision");
+      logEntry(`${ev.summary}  [${ev.risk}]  ${ev.reasoning || ""}`, "e-decision", "→");
       break;
     case "awaiting_approval":
       showApproval(ev.summary, ev.risk);
-      setStatus("waiting for approval", "paused");
+      setStatus("awaiting approval", "paused");
       break;
     case "approval_result":
       hideApproval();
       break;
     case "executed":
-      logEntry(`✓ step ${ev.step}: ${ev.ok ? "ok" : "ERROR " + ev.error}`, ev.ok ? "e-executed" : "e-error");
+      logEntry(`step ${ev.step}: ${ev.ok ? "ok" : "ERROR " + ev.error}`,
+               ev.ok ? "e-executed" : "e-error", ev.ok ? "✓" : "✕");
       break;
     case "replay_step":
-      logEntry(`▷ replay ${ev.step}: ${ev.summary} [${ev.risk}]`, "e-perception");
+      logEntry(`replay ${ev.step}: ${ev.summary} [${ev.risk}]`, "e-perception", "▷");
       break;
     case "replay_fallback":
-      logEntry(`! replay step ${ev.step} failed — falling back to model`, "e-approval");
+      logEntry(`replay step ${ev.step} failed — falling back to model`, "e-approval", "!");
       break;
     case "report":
       showReport(ev);
       break;
     case "error":
-      logEntry(`✗ ${ev.error}`, "e-error");
+      logEntry(`${ev.error}`, "e-error", "✕");
       setStatus("error", "error");
       break;
     case "finished":
-      logEntry(`— finished: ${ev.message}`, ev.ok ? "e-executed" : "e-error");
+      logEntry(`finished: ${ev.message}`, ev.ok ? "e-finish" : "e-error", ev.ok ? "✓" : "—");
       setStatus(ev.ok ? "done" : "stopped", ev.ok ? "done" : "error");
+      setMeta("");
       break;
     case "closed":
       setRunning(false);
@@ -115,7 +142,7 @@ function handleEvent(ev) {
 
 function showApproval(summary, risk) {
   $("approval-panel").classList.remove("hidden");
-  $("approval-text").textContent = `${summary}  —  classified "${risk}". Approve to proceed.`;
+  $("approval-text").textContent = `${summary} — classified "${risk}". Approve to proceed.`;
 }
 function hideApproval() {
   $("approval-panel").classList.add("hidden");
@@ -123,18 +150,23 @@ function hideApproval() {
 function showReport(ev) {
   const r = $("report");
   r.classList.remove("hidden");
-  const links = Object.entries(ev.paths || {})
-    .map(([k, v]) => `<li>${k}: <code>${v}</code></li>`)
+  const cls = ev.ok ? "ok" : "warn";
+  const head = ev.ok ? "✓" : "⚠";
+  const items = Object.entries(ev.paths || {})
+    .map(([k, v]) => `<li><span class="ftype">${esc(k)}</span><code>${esc(v)}</code></li>`)
     .join("");
-  r.innerHTML = `<strong>${ev.ok ? "✅" : "⚠️"} ${ev.message || ""}</strong>
-    <ul>${links}</ul>
-    <div>Artifacts saved under <code>${ev.run_dir}</code></div>`;
+  r.innerHTML = `<div class="report-head ${cls}">${head} ${esc(ev.message)}</div>
+    <ul>${items}</ul>
+    <div class="run-dir">Artifacts saved under <code>${esc(ev.run_dir)}</code></div>`;
 }
 
 // ----------------------------------------------------------------- controls
 $("btn-start").addEventListener("click", async () => {
   $("log").innerHTML = "";
   $("report").classList.add("hidden");
+  $("screenshot").classList.remove("show");
+  $("shot-empty").classList.remove("hidden");
+  $("shot-url").textContent = "about:blank";
   const body = {
     task_file: $("task-select").value || null,
     goal: $("goal").value || null,
@@ -151,7 +183,7 @@ $("btn-start").addEventListener("click", async () => {
   });
   if (!res.ok) {
     const err = await res.json();
-    logEntry(`✗ could not start: ${err.detail}`, "e-error");
+    logEntry(`could not start: ${err.detail}`, "e-error", "✕");
     return;
   }
   setRunning(true);

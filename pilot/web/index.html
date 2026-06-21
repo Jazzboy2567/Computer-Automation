@@ -3,113 +3,193 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0a0e1a" />
   <title>Pilot — personal browser automation</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <!-- First-run responsible-use notice (gates all runs). -->
-  <div id="ack-overlay" class="overlay hidden">
+  <div id="ack-overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ack-title">
     <div class="modal">
-      <h2>Before you start</h2>
-      <p>Pilot drives <strong>your</strong> browser using <strong>your</strong> own
+      <div class="modal-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2 4 5v6c0 5 3.4 8.3 8 11 4.6-2.7 8-6 8-11V5l-8-3Z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+      </div>
+      <h2 id="ack-title">Before you start</h2>
+      <p class="modal-lead">Pilot drives <strong>your</strong> browser using <strong>your own</strong>
          logged-in sessions and acts on your behalf.</p>
-      <ul>
-        <li>Automated access may violate some sites' Terms of Service and could
-            put your accounts at risk of restriction.</li>
-        <li><strong>You</strong> are responsible for which sites you target and
-            what you do there.</li>
-        <li>Pilot never handles passwords — you log in manually. It ships no
-            anti-bot evasion and will <strong>pause for you</strong> on a CAPTCHA
-            or bot check rather than attempt to solve it.</li>
-        <li><code>risk</code> actions (spending money, submitting, deleting,
-            changing settings) pause for your approval by default.</li>
+      <ul class="modal-list">
+        <li>Automated access may violate some sites' Terms of Service and could put your accounts at risk of restriction.</li>
+        <li><strong>You</strong> are responsible for which sites you target and what you do there.</li>
+        <li>Pilot never handles passwords — you log in manually. It ships no anti-bot evasion and will <strong>pause for you</strong> on a CAPTCHA or bot check.</li>
+        <li><span class="chip chip-risk">risk</span> actions (spending money, submitting, deleting, changing settings) pause for your approval by default.</li>
       </ul>
       <label class="check">
         <input type="checkbox" id="ack-check" />
-        I understand and accept responsibility for how I use Pilot.
+        <span class="check-box" aria-hidden="true"></span>
+        <span>I understand and accept responsibility for how I use Pilot.</span>
       </label>
-      <button id="ack-accept" disabled>Start using Pilot</button>
+      <button id="ack-accept" class="btn btn-primary btn-block" disabled>Start using Pilot</button>
     </div>
   </div>
 
-  <header>
-    <h1>✈️ Pilot</h1>
-    <span class="tagline">personal, local browser automation</span>
-  </header>
-
-  <main>
-    <section class="panel" id="setup">
-      <h2>Run a task</h2>
-
-      <div class="field">
-        <label for="task-select">Saved task</label>
-        <select id="task-select"><option value="">— ad-hoc goal —</option></select>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M29 4 14 17"/>
+            <path d="M29 4 20 28l-6-11-11-6L29 4Z"/>
+          </svg>
+        </span>
+        <span class="brand-text">
+          <span class="brand-name">Pilot</span>
+          <span class="brand-sub">personal browser automation</span>
+        </span>
       </div>
-
-      <div class="field" id="goal-field">
-        <label for="goal">Goal (ad-hoc)</label>
-        <input type="text" id="goal" placeholder="e.g. List the 5 cheapest books and their prices" />
+      <div class="topbar-right">
+        <span class="badge" title="No credentials are ever stored; runs are local">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          local · no credentials
+        </span>
+        <span id="status-pill" class="pill idle"><span class="dot"></span><span class="label">idle</span></span>
       </div>
-      <div class="field" id="url-field">
-        <label for="start-url">Start URL (optional)</label>
-        <input type="text" id="start-url" placeholder="https://books.toscrape.com" />
-      </div>
+    </header>
 
-      <div class="row">
-        <div class="field">
-          <label for="provider">Provider</label>
-          <select id="provider">
-            <option value="stub">stub (no API)</option>
-            <option value="anthropic">anthropic</option>
-            <option value="openai">openai</option>
-            <option value="local">local (Ollama)</option>
-          </select>
+    <main class="layout">
+      <aside class="sidebar">
+        <section class="card" id="setup">
+          <div class="card-head">
+            <h2>Run a task</h2>
+          </div>
+          <div class="card-body">
+            <div class="field">
+              <label for="task-select">Saved task</label>
+              <div class="select-wrap">
+                <select id="task-select"><option value="">— ad-hoc goal —</option></select>
+              </div>
+            </div>
+
+            <div class="field" id="goal-field">
+              <label for="goal">Goal</label>
+              <input type="text" id="goal" placeholder="e.g. List the 5 cheapest books and their prices" />
+            </div>
+            <div class="field" id="url-field">
+              <label for="start-url">Start URL <span class="opt">optional</span></label>
+              <input type="text" id="start-url" placeholder="https://books.toscrape.com" />
+            </div>
+
+            <div class="grid-2">
+              <div class="field">
+                <label for="provider">Provider</label>
+                <div class="select-wrap">
+                  <select id="provider">
+                    <option value="stub">stub (no API)</option>
+                    <option value="anthropic">anthropic</option>
+                    <option value="openai">openai</option>
+                    <option value="local">local (Ollama)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field">
+                <label for="approval">Approval</label>
+                <div class="select-wrap">
+                  <select id="approval">
+                    <option value="checkpoint" selected>checkpoint</option>
+                    <option value="autonomous">autonomous</option>
+                    <option value="step">step</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid-2 align-end">
+              <div class="field">
+                <label for="delay">Delay <span class="opt">seconds</span></label>
+                <input type="number" id="delay" value="0" min="0" step="0.5" />
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="headed" checked />
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label">Headed</span>
+              </label>
+            </div>
+
+            <div class="controls">
+              <button id="btn-start" class="btn btn-primary">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                Start
+              </button>
+              <button id="btn-pause" class="btn" disabled>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+                Pause
+              </button>
+              <button id="btn-resume" class="btn" disabled>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                Resume
+              </button>
+              <button id="btn-stop" class="btn btn-danger" disabled>
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+                Kill
+              </button>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="content">
+        <div id="approval-panel" class="banner hidden" role="alert">
+          <div class="banner-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 17h.01"/></svg>
+          </div>
+          <div class="banner-body">
+            <div class="banner-title">Approval required <span class="chip chip-risk">risk</span></div>
+            <p id="approval-text" class="banner-text">—</p>
+          </div>
+          <div class="banner-actions">
+            <button id="btn-approve" class="btn btn-primary">Approve</button>
+            <button id="btn-decline" class="btn btn-danger">Decline</button>
+          </div>
         </div>
-        <div class="field">
-          <label for="approval">Approval mode</label>
-          <select id="approval">
-            <option value="checkpoint" selected>checkpoint (pause on risk)</option>
-            <option value="autonomous">autonomous</option>
-            <option value="step">step (confirm each)</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="delay">Delay (s)</label>
-          <input type="number" id="delay" value="0" min="0" step="0.5" />
-        </div>
-        <div class="field check-field">
-          <label><input type="checkbox" id="headed" checked /> Headed</label>
-        </div>
-      </div>
 
-      <div class="controls">
-        <button id="btn-start" class="primary">▶ Start</button>
-        <button id="btn-pause" disabled>⏸ Pause</button>
-        <button id="btn-resume" disabled>▶ Resume</button>
-        <button id="btn-stop" class="danger" disabled>■ Kill</button>
-      </div>
-    </section>
-
-    <section class="panel" id="approval-panel" class="hidden">
-      <h2>Approval required <span class="risk-badge">risk</span></h2>
-      <p id="approval-text">—</p>
-      <div class="controls">
-        <button id="btn-approve" class="primary">✓ Approve</button>
-        <button id="btn-decline" class="danger">✗ Decline</button>
-      </div>
-    </section>
-
-    <section class="panel grow">
-      <h2>Live activity <span id="status-pill" class="pill idle">idle</span></h2>
-      <div class="split">
-        <div id="log" class="log"></div>
-        <div class="shot">
-          <img id="screenshot" alt="latest screenshot" />
-          <div id="report" class="report hidden"></div>
-        </div>
-      </div>
-    </section>
-  </main>
+        <section class="card grow">
+          <div class="card-head">
+            <h2>Live activity</h2>
+            <span id="activity-meta" class="meta"></span>
+          </div>
+          <div class="activity">
+            <div class="log-pane">
+              <div id="log" class="log">
+                <div class="log-empty">
+                  <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                  <span>Configure a task and press <strong>Start</strong> to watch Pilot work.</span>
+                </div>
+              </div>
+            </div>
+            <div class="shot-pane">
+              <div class="browser-frame">
+                <div class="browser-bar">
+                  <span class="dots"><i></i><i></i><i></i></span>
+                  <span class="addr" id="shot-url">about:blank</span>
+                </div>
+                <div class="browser-view">
+                  <img id="screenshot" alt="latest step screenshot" />
+                  <div class="shot-empty" id="shot-empty">
+                    <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>
+                    <span>Step screenshots appear here</span>
+                  </div>
+                </div>
+              </div>
+              <div id="report" class="report hidden"></div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>
