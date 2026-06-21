@@ -5,10 +5,10 @@
 #   make test PY=.venv/Scripts/python.exe
 PY ?= python
 
-.PHONY: help install install-uv test serve demo lint clean
+.PHONY: help install install-uv test serve demo ml-demo lint clean
 
 help:
-	@echo "Targets: install | install-uv | test | serve | demo | lint | clean"
+	@echo "Targets: install | install-uv | test | serve | demo | ml-demo | lint | clean"
 
 install:                       ## create venv + install deps + Chromium
 	$(PY) -m venv .venv
@@ -29,6 +29,9 @@ serve:                         ## launch the web UI on http://127.0.0.1:8000
 
 demo:                          ## offline end-to-end demo (no network/API key)
 	$(PY) -m pilot.cli demo
+
+ml-demo:                       ## offline ML demo (heuristic planner + bundled sample)
+	$(PY) -m pilot.cli ml "classify iris species" --planner heuristic
 
 lint:
 	$(PY) -m ruff check pilot tests || true

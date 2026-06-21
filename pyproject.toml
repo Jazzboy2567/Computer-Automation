@@ -14,6 +14,11 @@ dependencies = [
     "jinja2>=3.1",
     "python-multipart>=0.0.9",
     "httpx>=0.27",
+    # ML foreground: the engine that actually produces results.
+    "scikit-learn>=1.4",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "joblib>=1.3",
 ]
 
 [project.optional-dependencies]

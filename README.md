@@ -16,6 +16,10 @@ particular site.
 
 ## Highlights
 
+- **ML is the foreground** — you state a goal and a machine-learning engine
+  produces the result (with performance metrics). The LLM (Ollama) is a
+  **background planner** that only interprets the goal; a no-AI heuristic
+  fallback means ML always runs. Each goal lives in its own isolated workspace.
 - **Reliable perception** — `get_dom_summary` turns a live page into a compact,
   stable, token-efficient list of actionable + readable elements the model
   targets by short ref IDs (`e12`). DOM-first, with an automatic **vision
@@ -76,6 +80,39 @@ Open <http://127.0.0.1:8000>, accept the first-run responsible-use notice, pick 
 task or type an ad-hoc goal, and press **Start**.
 
 ---
+
+## ML mode — the foreground
+
+You state a goal; an ML engine produces the result. The LLM (Ollama) only plans
+the task in the background, and is optional.
+
+```bash
+# No data + no Ollama: a heuristic planner + a bundled sample still produce a result
+pilot ml "classify iris species" --planner heuristic
+
+# Your own data; the engine trains + evaluates and writes a report
+pilot ml "predict churn" --data customers.csv --target churned
+
+# Let the local LLM interpret a fuzzy goal (falls back to heuristic if Ollama is down)
+pilot ml "group these customers into segments" --data customers.csv --planner auto
+```
+
+How it works (`pilot/ml/`):
+
+1. **Workspace** — each goal gets an isolated `ml_workspaces/<goal>_<ts>/` with a
+   data snapshot, the model artifact, predictions, and a `report.md`.
+2. **Planner (background AI)** — `OllamaPlanner` (local LLM, `format=json`) or the
+   no-AI `HeuristicPlanner` turns the goal + a data profile into an `MLTaskSpec`
+   (task type, target, model, metric). `--planner auto` tries Ollama, then falls
+   back to the heuristic — so it runs with no AI at all.
+3. **Engine (foreground ML)** — scikit-learn trains and evaluates the model and
+   produces the result + metrics. **No LLM is in this path.** Supports
+   **classification**, **regression**, and **clustering** today.
+4. **Report** — `metrics.json` + a `report.md` with the chosen spec, a metrics
+   table, and feature importances (or cluster sizes).
+
+Configure the background model with `OLLAMA_MODEL` / `OLLAMA_HOST`. The model is
+never what produces your result — that's always the ML engine.
 
 ## One-time manual login (the only way Pilot touches your accounts)
 
