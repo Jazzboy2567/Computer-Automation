@@ -1,0 +1,82 @@
+{
+  "name": "books-demo",
+  "goal": "Collect every book's title, price and stock from the catalog, then rank cheapest first.",
+  "sites": [
+    "https://books.toscrape.com/"
+  ],
+  "created": "2026-06-21T05:12:23+00:00",
+  "provider": "stub",
+  "steps": [
+    {
+      "action": {
+        "type": "goto",
+        "ref": null,
+        "text": null,
+        "url": "https://books.toscrape.com/",
+        "selector": null,
+        "direction": null,
+        "amount": null,
+        "seconds": null,
+        "wait_for": null,
+        "store_as": null,
+        "fields": null,
+        "done": false,
+        "reasoning": "open the catalog",
+        "x": null,
+        "y": null
+      },
+      "locator": null,
+      "url_before": "about:blank",
+      "risk": "read"
+    },
+    {
+      "action": {
+        "type": "extract",
+        "ref": null,
+        "text": null,
+        "url": null,
+        "selector": "article.product_pod",
+        "direction": null,
+        "amount": null,
+        "seconds": null,
+        "wait_for": null,
+        "store_as": "books",
+        "fields": {
+          "title": "h3 a@title",
+          "price": "p.price_color",
+          "url": "h3 a@href",
+          "in_stock": "p.instock.availability"
+        },
+        "done": false,
+        "reasoning": "extract each product's title, price, stock and link",
+        "x": null,
+        "y": null
+      },
+      "locator": null,
+      "url_before": "https://books.toscrape.com/",
+      "risk": "read"
+    },
+    {
+      "action": {
+        "type": "done",
+        "ref": null,
+        "text": null,
+        "url": null,
+        "selector": null,
+        "direction": null,
+        "amount": null,
+        "seconds": null,
+        "wait_for": null,
+        "store_as": null,
+        "fields": null,
+        "done": true,
+        "reasoning": "collected all products on the page",
+        "x": null,
+        "y": null
+      },
+      "locator": null,
+      "url_before": "https://books.toscrape.com/",
+      "risk": "read"
+    }
+  ]
+}
