@@ -243,7 +243,20 @@ The **action schema is centralized** in `pilot/providers/base.py`
 new provider only formats requests for its API — the action vocabulary is shared.
 Register it in `pilot/providers/__init__.py::get_provider`. API keys are read from
 the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) **at call time** and are
-never stored.
+never stored — set them yourself as OS environment variables; nothing is written
+to the repo.
+
+### Choosing the model
+
+You don't need to edit source. Set the model id, in precedence order:
+
+1. **Runtime** — CLI `--model claude-sonnet-4-6`, or the UI "Model" field.
+2. **Per task** — `"model": "claude-sonnet-4-6"` in the task JSON.
+3. **Default** — the provider's built-in default (Anthropic: `claude-opus-4-8`).
+
+For routine browser automation, **`claude-sonnet-4-6`** is the recommended
+workhorse (fast, cheap, strong tool-use); reserve Opus for hard sites. For the
+local provider, set `OLLAMA_MODEL` instead.
 
 ### Local LLM (Ollama) — no cloud, no API key
 

@@ -50,8 +50,10 @@ class Settings:
     action_delay: float = 0.0
     # Token budget for the DOM summary handed to the model.
     dom_token_budget: int = 4000
-    # Default model provider name ("stub" | "anthropic" | "openai").
+    # Default model provider name ("stub" | "anthropic" | "openai" | "local").
     provider: str = "stub"
+    # Optional model id override (e.g. "claude-sonnet-4-6"); None = provider default.
+    model: str | None = None
     # Run artifact directory (set per-run).
     run_dir: Path | None = None
 
