@@ -41,15 +41,40 @@ particular site.
 
 ### 1. Install
 
-**With `uv` (recommended):**
+**With `uv` (recommended).** First install uv itself, once:
+
+- **Windows:** `winget install --id=astral-sh.uv -e` (this puts `uv` on your PATH).
+- **macOS / Linux:** `curl -LsSf https://astral.sh/uv/install.sh | sh`
+
+Open a **new** terminal and check it's found: `uv --version`.
+
+Then create the environment and install Pilot:
 
 ```bash
-uv venv
-uv pip install -e ".[dev]"          # add ",anthropic,openai" for real providers
+uv venv --python 3.13          # 3.13 — Playwright wheels are most reliable here
+uv pip install -e ".[dev]"     # add ",anthropic,openai" for the real browser providers
 uv run playwright install chromium
 ```
 
-**With venv + pip:**
+Run anything through the venv with `uv run …` (e.g. `uv run pytest`,
+`uv run pilot ml "classify iris species"`).
+
+> **Windows gotchas (learned the hard way):**
+> - **`uv` not found after `pip install uv`?** pip drops `uv.exe` in your per-user
+>   Scripts folder (e.g. `%APPDATA%\Python\Python3xx\Scripts`), which isn't on PATH
+>   by default. Either install via winget (above), add that folder to PATH, or
+>   invoke uv as **`python -m uv …`**.
+> - **`uv pip install` writing to `C:\Python3xx` and failing with _Access is
+>   denied_?** It targeted the *system* Python instead of the project venv. Point
+>   it at the venv explicitly:
+>   `uv pip install -e ".[dev]" --python .venv\Scripts\python.exe`.
+> - **`uv venv --clear` failing with _Access is denied_ on `.venv\Lib`?** A
+>   process still holds the old venv open (a stray `python.exe`/server, or your
+>   editor's interpreter), often made worse by **OneDrive** file locks. Close
+>   those, then delete `.venv` and recreate. Keeping the project outside OneDrive
+>   (e.g. `C:\dev\…`) avoids this entirely.
+
+**Or plain venv + pip (no uv):**
 
 ```bash
 python -m venv .venv
@@ -59,8 +84,8 @@ python -m pip install -e ".[dev]"   # add ".[dev,anthropic,openai]" for real pro
 python -m playwright install chromium
 ```
 
-> Python 3.11+ is required. On Windows, the `make` targets work under Git Bash;
-> otherwise run the underlying commands directly.
+> Python 3.11+ is required (3.13 recommended). On Windows, the `make` targets work
+> under Git Bash; otherwise run the underlying commands directly.
 
 ### 2. Verify (no network, no API key)
 
