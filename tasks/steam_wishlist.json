@@ -1,0 +1,11 @@
+{
+  "name": "Steam wishlist price check",
+  "goal": "Open my Steam wishlist and list each game with its current price and discount percentage; note anything currently on sale.",
+  "sites": ["https://store.steampowered.com/wishlist/"],
+  "keywords": ["sale", "discount", "-%"],
+  "output_schema": ["title", "price", "discount"],
+  "sort": ["price:asc"],
+  "provider": "anthropic",
+  "recipe": "steam-wishlist",
+  "_notes": "Requires a one-time manual Steam login in the persistent profile and ANTHROPIC_API_KEY in the environment. The model figures out extraction on the first run; later runs replay the recorded recipe with no model calls."
+}

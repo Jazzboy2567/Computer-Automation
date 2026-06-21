@@ -27,7 +27,7 @@ dev = [
 ]
 
 [project.scripts]
-pilot = "pilot.server:main"
+pilot = "pilot.cli:main"
 
 [build-system]
 requires = ["hatchling"]
