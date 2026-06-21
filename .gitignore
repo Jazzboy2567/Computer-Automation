@@ -12,6 +12,9 @@ secrets.json
 *.secret
 
 # --- Python ---
+# uv writes this when used in project mode; we use the pip-style `uv pip install`
+# flow, so it isn't consumed — ignore it rather than ship a stale lockfile.
+uv.lock
 __pycache__/
 *.py[cod]
 *$py.class
