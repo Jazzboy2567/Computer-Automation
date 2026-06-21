@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<!--
+  A page that paints to a full-viewport <canvas> and exposes NO actionable DOM
+  elements. The DOM summary will be empty, so perception must switch to VISION
+  mode. Used by the vision-fallback smoke test.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Canvas App</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    #app { display: block; width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <canvas id="app"></canvas>
+  <script>
+    const c = document.getElementById('app');
+    c.width = window.innerWidth;
+    c.height = window.innerHeight;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '24px sans-serif';
+    ctx.fillText('Everything here is painted on a canvas — no DOM elements.', 40, 80);
+  </script>
+</body>
+</html>

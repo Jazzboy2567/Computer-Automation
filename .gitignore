@@ -1,0 +1,37 @@
+# --- Pilot-specific (NEVER commit these) ---
+# Persistent browser profile holds YOUR logged-in cookies/session. Keep it local.
+profiles/
+# Run artifacts: screenshots, extracted text, generated reports.
+runs/
+# Any secrets / API keys.
+.env
+.env.*
+secrets.json
+*.secret
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Playwright ---
+test-results/
+playwright-report/
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

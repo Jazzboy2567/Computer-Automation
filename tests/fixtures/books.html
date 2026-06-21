@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<!--
+  Offline fixture mirroring the structure of books.toscrape.com (the demo site
+  named in the README). Using a local fixture keeps the smoke tests deterministic
+  and network-free for CI; an opt-in live test can hit the real site.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Books to Scrape (offline fixture)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 16px; }
+    h1 { margin: 0 0 16px; }
+    .product_pod {
+      display: inline-block; vertical-align: top; width: 44%;
+      box-sizing: border-box; margin: 0 1% 24px; padding: 12px;
+      border: 1px solid #ccc; min-height: 300px;
+    }
+    .product_pod h3 { font-size: 15px; margin: 8px 0; }
+    .price_color { color: #b0480a; font-weight: bold; }
+    .instock { color: #2a7d2a; }
+    footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #ccc; }
+    button { padding: 8px 14px; }
+  </style>
+</head>
+<body>
+  <h1>All products</h1>
+
+  <section id="catalog">
+    <article class="product_pod">
+      <div class="image_container"><a href="catalogue/a-light-in-the-attic.html"><img src="x.jpg" alt="A Light in the Attic" /></a></div>
+      <h3><a href="catalogue/a-light-in-the-attic.html" title="A Light in the Attic">A Light in the Attic</a></h3>
+      <p class="price_color">£51.77</p>
+      <p class="instock availability">In stock</p>
+      <form><button type="button" class="btn add-to-basket" data-testid="add-1">Add to basket</button></form>
+    </article>
+
+    <article class="product_pod">
+      <div class="image_container"><a href="catalogue/tipping-the-velvet.html"><img src="x.jpg" alt="Tipping the Velvet" /></a></div>
+      <h3><a href="catalogue/tipping-the-velvet.html" title="Tipping the Velvet">Tipping the Velvet</a></h3>
+      <p class="price_color">£53.74</p>
+      <p class="instock availability">In stock</p>
+      <form><button type="button" class="btn add-to-basket" data-testid="add-2">Add to basket</button></form>
+    </article>
+
+    <article class="product_pod">
+      <div class="image_container"><a href="catalogue/soumission.html"><img src="x.jpg" alt="Soumission" /></a></div>
+      <h3><a href="catalogue/soumission.html" title="Soumission">Soumission</a></h3>
+      <p class="price_color">£50.10</p>
+      <p class="instock availability">In stock</p>
+      <form><button type="button" class="btn add-to-basket" data-testid="add-3">Add to basket</button></form>
+    </article>
+
+    <article class="product_pod">
+      <div class="image_container"><a href="catalogue/sharp-objects.html"><img src="x.jpg" alt="Sharp Objects" /></a></div>
+      <h3><a href="catalogue/sharp-objects.html" title="Sharp Objects">Sharp Objects</a></h3>
+      <p class="price_color">£47.82</p>
+      <p class="instock availability">In stock</p>
+      <form><button type="button" class="btn add-to-basket" data-testid="add-4">Add to basket</button></form>
+    </article>
+
+    <article class="product_pod">
+      <div class="image_container"><a href="catalogue/sapiens.html"><img src="x.jpg" alt="Sapiens" /></a></div>
+      <h3><a href="catalogue/sapiens.html" title="Sapiens: A Brief History of Humankind">Sapiens: A Brief History of Humankind</a></h3>
+      <p class="price_color">£54.23</p>
+      <p class="instock availability">In stock</p>
+      <form><button type="button" class="btn add-to-basket" data-testid="add-5">Add to basket</button></form>
+    </article>
+
+    <article class="product_pod">
+      <div class="image_container"><a href="catalogue/the-requiem-red.html"><img src="x.jpg" alt="The Requiem Red" /></a></div>
+      <h3><a href="catalogue/the-requiem-red.html" title="The Requiem Red">The Requiem Red</a></h3>
+      <p class="price_color">£22.65</p>
+      <p class="instock availability">In stock</p>
+      <form><button type="button" class="btn add-to-basket" data-testid="add-6">Add to basket</button></form>
+    </article>
+
+    <article class="product_pod">
+      <div class="image_container"><a href="catalogue/the-dirty-little-secrets.html"><img src="x.jpg" alt="The Dirty Little Secrets" /></a></div>
+      <h3><a href="catalogue/the-dirty-little-secrets.html" title="The Dirty Little Secrets of Getting Your Dream Job">The Dirty Little Secrets of Getting Your Dream Job</a></h3>
+      <p class="price_color">£33.34</p>
+      <p class="instock availability">In stock</p>
+      <form><button type="button" class="btn add-to-basket" data-testid="add-7">Add to basket</button></form>
+    </article>
+
+    <article class="product_pod">
+      <div class="image_container"><a href="catalogue/the-coming-woman.html"><img src="x.jpg" alt="The Coming Woman" /></a></div>
+      <h3><a href="catalogue/the-coming-woman.html" title="The Coming Woman: A Novel">The Coming Woman: A Novel</a></h3>
+      <p class="price_color">£17.93</p>
+      <p class="instock availability">In stock</p>
+      <form><button type="button" class="btn add-to-basket" data-testid="add-8">Add to basket</button></form>
+    </article>
+  </section>
+
+  <footer>
+    <a href="page-2.html" class="next">next</a>
+    <button id="checkout" type="button">Proceed to checkout</button>
+  </footer>
+</body>
+</html>
