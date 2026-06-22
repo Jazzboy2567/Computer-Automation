@@ -139,6 +139,40 @@ How it works (`pilot/ml/`):
 Configure the background model with `OLLAMA_MODEL` / `OLLAMA_HOST`. The model is
 never what produces your result — that's always the ML engine.
 
+## Game agent (reinforcement learning)
+
+Train an ML agent to play a game where each frame is screenshotted, **structured
+data is extracted** (player health, enemies nearby, …) as the observation, and
+**your good/bad events** define the reward. The agent learns over that structured
+state — far more tractable than raw pixels.
+
+```bash
+pilot rl --episodes 5000      # trains on a simulated game; writes a workspace report
+```
+
+A run trains, then evaluates the trained policy against a random baseline and
+reports average return + survival, e.g. `trained 9.6 vs random -10.3`.
+
+How it fits together (`pilot/ml/rl/`):
+
+- **`env.py`** — `GameEnv` interface + a simulated `SimEnv` (survival game) used to
+  validate learning offline and in tests.
+- **`reward.py`** — `RewardSpec`: your good/bad events as rules over observation
+  changes (e.g. `enemies_nearby ↓ = +`, `player_health ↓ = −`, death = big −).
+  The env never hardcodes reward — you own it.
+- **`agent.py`** — a Q-learning agent over the (discretized) structured
+  observation. Swappable for a DQN later.
+- **`capture.py`** — the seam for a **real Steam game**: implement a `Capturer`
+  (screenshot via computer-use), a `FeatureExtractor` (frame → the structured
+  data), and an `ActionDriver` (key/mouse), compose them into a `ScreenGameEnv`,
+  and the *same* agent + reward + training loop apply.
+
+> **Real game, what's needed:** the specific game, the data fields to read from
+> each screenshot (and how to read them), the action set, and your good/bad event
+> list. Screenshots/inputs go through the **computer-use** tooling (desktop), which
+> requires your approval at runtime. Learning a fast real-time game from scratch is
+> a heavy undertaking; the structured-observation design above keeps it feasible.
+
 ## One-time manual login (the only way Pilot touches your accounts)
 
 Pilot uses a **persistent browser profile** at `./profiles/default`, so cookies
