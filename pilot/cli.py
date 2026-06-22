@@ -117,6 +117,23 @@ def _ml(args) -> int:
     return 0
 
 
+def _rl(args) -> int:
+    """Train an RL game agent on the simulated env (proof of the learn loop)."""
+    from .ml.rl.runner import run_rl_goal
+
+    def on_event(ev: dict) -> None:
+        if ev.get("event") == "train":
+            print(f"  training {ev['episodes']} episodes; actions={ev['actions']}")
+        elif ev.get("event") == "result":
+            print(f"  trained return {ev['trained']} vs random {ev['random']} (improvement {ev['improvement']:+})")
+
+    result, ws = run_rl_goal(episodes=args.episodes, on_event=on_event)
+    print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
+    print(f"  survival: trained {result.avg_survival_trained} vs random {result.avg_survival_random} steps")
+    print(f"  report: {ws.path / 'report.md'}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pilot", description="Personal browser automation.")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -145,6 +162,9 @@ def main(argv: list[str] | None = None) -> int:
     p_ml.add_argument("--planner", default="auto", choices=["auto", "ollama", "heuristic"],
                       help="auto = Ollama if reachable, else heuristic (no AI)")
 
+    p_rl = sub.add_parser("rl", help="train an RL game agent on the simulated env (screenshot->data->learn proof)")
+    p_rl.add_argument("--episodes", type=int, default=4000, help="self-play training episodes")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "serve":
@@ -158,6 +178,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(_demo(args))
     if args.cmd == "ml":
         return _ml(args)
+    if args.cmd == "rl":
+        return _rl(args)
     return 1
 
 
