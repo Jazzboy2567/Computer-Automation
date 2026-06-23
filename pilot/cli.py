@@ -118,18 +118,27 @@ def _ml(args) -> int:
 
 
 def _rl(args) -> int:
-    """Train an RL game agent on the simulated env (proof of the learn loop)."""
-    from .ml.rl.runner import run_rl_goal
-
+    """Train an RL game agent (toy sim, or the SPD-like trainer)."""
     def on_event(ev: dict) -> None:
         if ev.get("event") == "train":
             print(f"  training {ev['episodes']} episodes; actions={ev['actions']}")
         elif ev.get("event") == "result":
-            print(f"  trained return {ev['trained']} vs random {ev['random']} (improvement {ev['improvement']:+})")
+            extra = ""
+            if ev.get("depth_trained") is not None:
+                extra = f"; deepest floor {ev['depth_trained']} vs {ev['depth_random']}"
+            print(f"  trained return {ev['trained']} vs random {ev['random']} "
+                  f"(improvement {ev['improvement']:+}){extra}")
 
-    result, ws = run_rl_goal(episodes=args.episodes, on_event=on_event)
-    print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
-    print(f"  survival: trained {result.avg_survival_trained} vs random {result.avg_survival_random} steps")
+    if args.game == "spd":
+        from .ml.rl.spd_train import run_spd_training
+        result, ws = run_spd_training(episodes=args.episodes, on_event=on_event)
+        print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
+        print(f"  deepest floor: trained {result.avg_depth_trained} vs random {result.avg_depth_random}")
+    else:
+        from .ml.rl.runner import run_rl_goal
+        result, ws = run_rl_goal(episodes=args.episodes, on_event=on_event)
+        print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
+        print(f"  survival: trained {result.avg_survival_trained} vs random {result.avg_survival_random} steps")
     print(f"  report: {ws.path / 'report.md'}")
     return 0
 
@@ -162,8 +171,10 @@ def main(argv: list[str] | None = None) -> int:
     p_ml.add_argument("--planner", default="auto", choices=["auto", "ollama", "heuristic"],
                       help="auto = Ollama if reachable, else heuristic (no AI)")
 
-    p_rl = sub.add_parser("rl", help="train an RL game agent on the simulated env (screenshot->data->learn proof)")
-    p_rl.add_argument("--episodes", type=int, default=4000, help="self-play training episodes")
+    p_rl = sub.add_parser("rl", help="train an RL game agent (screenshot->data->learn)")
+    p_rl.add_argument("--game", default="sim", choices=["sim", "spd"],
+                      help="sim = toy survival env; spd = Shattered-Pixel-Dungeon-like trainer")
+    p_rl.add_argument("--episodes", type=int, default=4000, help="training episodes")
 
     args = parser.parse_args(argv)
 
