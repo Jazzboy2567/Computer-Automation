@@ -58,12 +58,28 @@ def spd_reward_spec() -> RewardSpec:
             RewardRule(field="level", direction="up", weight=5.0),                          # level up (kills) = good
             RewardRule(field="xp_frac", direction="up", weight=2.0, per_unit=True),         # progress to a kill/level
             RewardRule(field="enemies_visible", direction="down", weight=1.0),              # threat removed = good
-            RewardRule(field="depth", direction="up", weight=3.0),                          # descending = good
+            RewardRule(field="depth", direction="up", weight=10.0),                         # descending = strong progress
             RewardRule(field="gold", direction="up", weight=0.01, per_unit=True),           # gold = good
             RewardRule(field="inventory_count", direction="up", weight=1.0),                # more items = good
         ],
-        step_reward=0.1,            # passive survival / regen when not starving
+        step_reward=0.05,           # small passive-survival bonus (kept low so camping isn't optimal)
         death_field="hp_current",
         death_threshold=0.0,
         death_reward=-50.0,         # death = worst (an Ankh would soften this — future work)
     )
+
+
+def spd_training_reward() -> RewardSpec:
+    """The user's reward plus potential-based shaping toward the down-stairs.
+
+    Descending is a sparse reward the agent rarely discovers by random
+    exploration, so for *training* we add a symmetric (un-farmable) shaping term
+    on distance-to-stairs — progress toward the (good) descend. Evaluation still
+    uses the pure `spd_reward_spec()` so performance reflects the real objective.
+    """
+    base = spd_reward_spec()
+    shaping = [
+        RewardRule(field="stairs_dist", direction="down", weight=0.3, per_unit=True),
+        RewardRule(field="stairs_dist", direction="up", weight=-0.3, per_unit=True),
+    ]
+    return base.model_copy(update={"rules": base.rules + shaping})

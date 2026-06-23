@@ -147,11 +147,24 @@ data is extracted** (player health, enemies nearby, …) as the observation, and
 state — far more tractable than raw pixels.
 
 ```bash
-pilot rl --episodes 5000      # trains on a simulated game; writes a workspace report
+pilot rl --episodes 5000              # toy survival sim (proves the learn loop)
+pilot rl --game spd --episodes 12000  # Shattered-Pixel-Dungeon-like trainer
 ```
 
 A run trains, then evaluates the trained policy against a random baseline and
-reports average return + survival, e.g. `trained 9.6 vs random -10.3`.
+reports average return + survival (and, for `spd`, deepest floor reached), e.g.
+`trained 9.6 vs random -10.3`.
+
+**Shattered Pixel Dungeon (`--game spd`)** — *train first, deploy by mouse later.*
+The agent trains on an SPD-like dungeon simulator (`pilot/ml/rl/spd_sim.py`) that
+shares SPD's observation fields and `spd_reward_spec()` (your good/bad events:
+kills/level-up/descend/loot = good, damage = bad, **death = worst**). Training is
+pure code — fast, no screen. The learned policy is later deployed onto the real
+game through the `ScreenGameEnv` seam (screenshot → `FeatureExtractor` → mouse
+`ActionDriver` via computer-use). It's an approximation of the real game
+(sim-to-real gap), so the deployed policy needs fine-tuning. Example result: the
+trained agent strongly out-survives random and descends deeper (deepest floor
+~1.6 vs ~1.0) under enemy-spawn pressure.
 
 How it fits together (`pilot/ml/rl/`):
 

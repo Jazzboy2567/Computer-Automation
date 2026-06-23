@@ -16,6 +16,11 @@ from .env import GameEnv, Observation
 from .reward import RewardSpec
 
 Policy = Callable[[Observation], str]
+Featurizer = Callable[[Observation], Observation]
+
+
+def _identity(obs: Observation) -> Observation:
+    return obs
 
 
 class RLResult(BaseModel):
@@ -32,15 +37,23 @@ class RLResult(BaseModel):
     learning_curve: list[float] = Field(default_factory=list)
     model_path: Optional[str] = None
     policy_sample: Optional[str] = None
+    # Dungeon depth reached (SPD training only; None for the toy sim).
+    avg_depth_trained: Optional[float] = None
+    avg_depth_random: Optional[float] = None
 
     def headline(self) -> str:
         return f"avg return {self.avg_return_trained:.1f} (random {self.avg_return_random:.1f})"
 
 
-def train(env: GameEnv, agent: QLearningAgent, reward: RewardSpec, episodes: int) -> list[float]:
+def train(
+    env: GameEnv, agent: QLearningAgent, reward: RewardSpec, episodes: int,
+    featurizer: Featurizer = _identity,
+) -> list[float]:
     """Interact for `episodes`, learning from the user-defined reward.
 
-    Returns a learning curve (mean episode return per ~5% block).
+    The agent learns over ``featurizer(obs)`` (a compact decision-state) while the
+    reward is computed from the full observation. Returns a learning curve (mean
+    episode return per ~5% block).
     """
     curve: list[float] = []
     window: list[float] = []
@@ -51,10 +64,10 @@ def train(env: GameEnv, agent: QLearningAgent, reward: RewardSpec, episodes: int
         done = False
         total = 0.0
         while not done:
-            action = agent.act(obs, epsilon)
+            action = agent.act(featurizer(obs), epsilon)
             nxt, done, info = env.step(action)
             r = reward.compute(obs, nxt, done, info)
-            agent.learn(obs, action, r, nxt, done)
+            agent.learn(featurizer(obs), action, r, featurizer(nxt), done)
             total += r
             obs = nxt
         window.append(total)
@@ -66,7 +79,10 @@ def train(env: GameEnv, agent: QLearningAgent, reward: RewardSpec, episodes: int
     return curve
 
 
-def evaluate(env: GameEnv, policy: Policy, reward: RewardSpec, episodes: int) -> tuple[float, float]:
+def evaluate(
+    env: GameEnv, policy: Policy, reward: RewardSpec, episodes: int,
+    featurizer: Featurizer = _identity,
+) -> tuple[float, float]:
     """Run greedy/eval episodes; return (mean return, mean survived steps)."""
     returns, survivals = [], []
     for _ in range(episodes):
@@ -75,7 +91,7 @@ def evaluate(env: GameEnv, policy: Policy, reward: RewardSpec, episodes: int) ->
         total = 0.0
         steps = 0
         while not done:
-            action = policy(obs)
+            action = policy(featurizer(obs))
             nxt, done, info = env.step(action)
             total += reward.compute(obs, nxt, done, info)
             obs = nxt
