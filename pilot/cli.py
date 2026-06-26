@@ -131,12 +131,13 @@ def _rl(args) -> int:
 
     if args.game == "spd":
         from .ml.rl.spd_train import run_spd_training
-        result, ws = run_spd_training(episodes=args.episodes, on_event=on_event)
+        episodes = args.episodes if args.episodes is not None else 12000  # SPD needs more
+        result, ws = run_spd_training(episodes=episodes, on_event=on_event)
         print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
         print(f"  deepest floor: trained {result.avg_depth_trained} vs random {result.avg_depth_random}")
     else:
         from .ml.rl.runner import run_rl_goal
-        result, ws = run_rl_goal(episodes=args.episodes, on_event=on_event)
+        result, ws = run_rl_goal(episodes=args.episodes or 4000, on_event=on_event)
         print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
         print(f"  survival: trained {result.avg_survival_trained} vs random {result.avg_survival_random} steps")
     print(f"  report: {ws.path / 'report.md'}")
@@ -174,7 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     p_rl = sub.add_parser("rl", help="train an RL game agent (screenshot->data->learn)")
     p_rl.add_argument("--game", default="sim", choices=["sim", "spd"],
                       help="sim = toy survival env; spd = Shattered-Pixel-Dungeon-like trainer")
-    p_rl.add_argument("--episodes", type=int, default=4000, help="training episodes")
+    p_rl.add_argument("--episodes", type=int, default=None,
+                      help="training episodes (default: 12000 for spd, 4000 for the toy sim)")
 
     args = parser.parse_args(argv)
 

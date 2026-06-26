@@ -94,7 +94,7 @@ def _report(result: RLResult, reward: RewardSpec) -> str:
 
 
 def run_spd_training(
-    episodes: int = 8000,
+    episodes: int = 12000,   # 8000 undertrains; 12000 ~halves the loss (measured)
     base_dir: Optional[Path] = None,
     seed: int = 0,
     on_event: Optional[EventCb] = None,
