@@ -129,7 +129,18 @@ def _rl(args) -> int:
             print(f"  trained return {ev['trained']} vs random {ev['random']} "
                   f"(improvement {ev['improvement']:+}){extra}")
 
-    if args.game == "spd":
+    if args.game == "spd-real":
+        from .ml.rl.spd_real import bridge_available
+        from .ml.rl.spd_real_train import run_spd_real_training
+        if not bridge_available():
+            print("The headless SPD bridge is not built. Clone the SPD repo, run")
+            print("`gradlew :rlbridge:writeClasspath` there, or set SPD_CLONE_DIR.")
+            return 1
+        episodes = args.episodes if args.episodes is not None else 4000
+        result, ws = run_spd_real_training(episodes=episodes, on_event=on_event)
+        print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
+        print(f"  deepest floor: trained {result.avg_depth_trained} vs random {result.avg_depth_random}")
+    elif args.game == "spd":
         from .ml.rl.spd_train import run_spd_training
         episodes = args.episodes if args.episodes is not None else 12000  # SPD needs more
         result, ws = run_spd_training(episodes=episodes, on_event=on_event)
@@ -173,10 +184,11 @@ def main(argv: list[str] | None = None) -> int:
                       help="auto = Ollama if reachable, else heuristic (no AI)")
 
     p_rl = sub.add_parser("rl", help="train an RL game agent (screenshot->data->learn)")
-    p_rl.add_argument("--game", default="sim", choices=["sim", "spd"],
-                      help="sim = toy survival env; spd = Shattered-Pixel-Dungeon-like trainer")
+    p_rl.add_argument("--game", default="sim", choices=["sim", "spd", "spd-real"],
+                      help="sim = toy survival env; spd = SPD-like simulator; "
+                           "spd-real = the actual game via the headless Java bridge")
     p_rl.add_argument("--episodes", type=int, default=None,
-                      help="training episodes (default: 12000 for spd, 4000 for the toy sim)")
+                      help="training episodes (default: 12000 for spd, 4000 for sim/spd-real)")
 
     args = parser.parse_args(argv)
 
