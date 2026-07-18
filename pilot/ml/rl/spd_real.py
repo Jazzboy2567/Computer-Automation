@@ -76,7 +76,7 @@ class SPDRealEnv(GameEnv):
 
     action_space = list(SPD_ACTIONS)
 
-    def __init__(self, seed: int = 0, max_steps: int = 300, proc: Any = None):
+    def __init__(self, seed: int = 0, max_steps: int = 600, proc: Any = None):
         self.base_seed = seed
         self.max_steps = max_steps
         self.steps = 0

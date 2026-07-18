@@ -40,6 +40,7 @@ SPD_ACTIONS: list[str] = [
     "pickup",                                  # step onto / grab loot on the tile
     "descend",                                 # take the down-stairs
     "use_item",                                # use the best consumable (e.g. heal when low)
+    "explore",                                 # walk to the nearest unexplored area (tap the dark)
     "wait",                                    # pass a turn (passive regen)
 ]
 
@@ -81,5 +82,9 @@ def spd_training_reward() -> RewardSpec:
     shaping = [
         RewardRule(field="stairs_dist", direction="down", weight=0.3, per_unit=True),
         RewardRule(field="stairs_dist", direction="up", weight=-0.3, per_unit=True),
+        # Seeing new floor is progress ("check the floor for loot" / find the
+        # stairs). Un-farmable: cells_explored only ever grows. The sim doesn't
+        # emit the field, so this rule is inert there (missing field = 0 delta).
+        RewardRule(field="cells_explored", direction="up", weight=0.05, per_unit=True),
     ]
     return base.model_copy(update={"rules": base.rules + shaping})
