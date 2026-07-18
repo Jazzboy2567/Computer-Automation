@@ -79,7 +79,7 @@ def run_spd_real_training(
     episodes: int = 4000,
     base_dir: Optional[Path] = None,
     seed: int = 0,
-    max_steps: int = 300,
+    max_steps: int = 600,
     eval_episodes: int = 30,
     on_event: Optional[EventCb] = None,
 ) -> tuple[RLResult, MLWorkspace]:
