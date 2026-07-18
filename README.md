@@ -149,6 +149,7 @@ state — far more tractable than raw pixels.
 ```bash
 pilot rl --episodes 5000              # toy survival sim (proves the learn loop)
 pilot rl --game spd --episodes 12000  # Shattered-Pixel-Dungeon-like trainer
+pilot rl --game spd-real              # the ACTUAL game, embedded headless (see below)
 ```
 
 A run trains, then evaluates the trained policy against a random baseline and
@@ -165,6 +166,18 @@ game through the `ScreenGameEnv` seam (screenshot → `FeatureExtractor` → mou
 (sim-to-real gap), so the deployed policy needs fine-tuning. Example result: the
 trained agent strongly out-survives random and descends deeper (deepest floor
 ~1.6 vs ~1.0) under enemy-spawn pressure.
+
+**The real game (`--game spd-real`)** — *no sim-to-real gap.* The actual
+open-source SPD (Java) runs **embedded and headless** at ~37,000 game-turns/sec
+via a small `rlbridge` module added to a local clone: it boots the real game
+logic with no OpenGL, steps turns synchronously, and serves a line protocol
+(`reset`/`act` in, JSON observations out) that `pilot/ml/rl/spd_real.py` wraps
+as a `GameEnv`. Observations are **strictly player-visible** — enemies count
+only inside the hero's field of view, and the stairs' direction is unknown
+until the player has actually seen the exit tile. Setup: clone
+`00-Evan/shattered-pixel-dungeon` with the rlbridge module to
+`~/shattered-pixel-dungeon` (or set `SPD_CLONE_DIR`), run
+`gradlew :rlbridge:writeClasspath` there once, then `pilot rl --game spd-real`.
 
 How it fits together (`pilot/ml/rl/`):
 
