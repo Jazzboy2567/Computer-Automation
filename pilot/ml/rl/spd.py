@@ -45,6 +45,10 @@ SPD_ACTIONS: list[str] = [
     "eat_food",                                # eat carried food
     "zap_wand",                                # cast a charged wand at the nearest visible enemy
     "equip_gear",                              # one gear-progression step (equip/strength/upgrade)
+    "throw_item",                              # throw the best missile weapon at the nearest visible enemy
+    "shoot_bow",                               # fire the Spirit Bow (huntress) at the nearest visible enemy
+    "quaff_unknown",                           # drink an unidentified potion (the ID gamble)
+    "read_unknown",                            # read an unidentified scroll (the ID gamble)
     "wait",                                    # pass a turn (passive regen)
 ]
 

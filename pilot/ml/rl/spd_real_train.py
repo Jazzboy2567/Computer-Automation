@@ -30,14 +30,15 @@ def _emit(cb: Optional[EventCb], **event: Any) -> None:
         cb(event)
 
 
-def _evaluate(env: SPDRealEnv, policy, reward: RewardSpec, episodes: int) -> tuple[float, float, float]:
+def _evaluate(env: SPDRealEnv, policy, reward: RewardSpec, episodes: int,
+              feat=spd_featurizer) -> tuple[float, float, float]:
     """Return (mean return, mean survived steps, mean deepest floor)."""
     rets, survs, depths = [], [], []
     for _ in range(episodes):
         obs = env.reset()
         done, total, steps, deepest = False, 0.0, 0, 1
         while not done:
-            action = policy(spd_featurizer(obs))
+            action = policy(feat(obs))
             nxt, done, info = env.step(action)
             total += reward.compute(obs, nxt, done, info)
             obs = nxt
@@ -77,6 +78,15 @@ def _report(result: RLResult, reward: RewardSpec) -> str:
     ]) + "\n"
 
 
+def make_agent(kind: str, actions: list[str], seed: int = 0):
+    """'table' = tabular Q over the compact featurizer; 'dqn' = neural net over
+    the FULL observation (featurizer identity). Returns (agent, featurizer)."""
+    if kind == "dqn":
+        from .dqn import DQNAgent
+        return DQNAgent(actions, seed=seed), (lambda o: o)
+    return QLearningAgent(actions, seed=seed), spd_featurizer
+
+
 def run_spd_real_training(
     episodes: int = 4000,
     base_dir: Optional[Path] = None,
@@ -85,6 +95,7 @@ def run_spd_real_training(
     eval_episodes: int = 30,
     hero: str = "warrior",
     challenges: int = 0,          # SPD challenge bitmask
+    agent_kind: str = "table",
     on_event: Optional[EventCb] = None,
 ) -> tuple[RLResult, MLWorkspace]:
     ws = MLWorkspace.create("Shattered Pixel Dungeon (REAL game)", base_dir=base_dir)
@@ -92,17 +103,17 @@ def run_spd_real_training(
 
     reward = spd_reward_spec()             # the user's true objective (for eval)
     train_reward = spd_training_reward()   # + shaping toward the stairs (for learning)
-    agent = QLearningAgent(SPDRealEnv.action_space, seed=seed)
+    agent, feat = make_agent(agent_kind, SPDRealEnv.action_space, seed)
     _emit(on_event, event="train", episodes=episodes, actions=SPDRealEnv.action_space)
 
     kw = {"max_steps": max_steps, "hero": hero, "challenges": challenges}
     best_depth, best_gear = 0, ""
     with SPDRealEnv(seed=seed, **kw) as env:
-        curve = train(env, agent, train_reward, episodes, featurizer=spd_featurizer)
+        curve = train(env, agent, train_reward, episodes, featurizer=feat)
         best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
 
     with SPDRealEnv(seed=_EVAL_SEED, **kw) as env:
-        rt, st, dt = _evaluate(env, agent.policy, reward, eval_episodes)
+        rt, st, dt = _evaluate(env, agent.policy, reward, eval_episodes, feat=feat)
         if getattr(env, "best_depth", 0) > best_depth:
             best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
     rng = random.Random(7)
