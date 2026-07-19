@@ -131,13 +131,38 @@ def _rl(args) -> int:
 
     if args.game == "spd-real":
         from .ml.rl.spd_real import bridge_available
-        from .ml.rl.spd_real_train import run_spd_real_training
         if not bridge_available():
             print("The headless SPD bridge is not built. Clone the SPD repo, run")
             print("`gradlew :rlbridge:writeClasspath` there, or set SPD_CLONE_DIR.")
             return 1
+        if args.campaign:
+            from .ml.rl.spd_campaign import run_campaign
+
+            def on_stage(ev: dict) -> None:
+                if ev.get("event") == "workspace":
+                    print(f"  workspace: {ev['path']}")
+                elif ev.get("event") == "stage":
+                    print(f"  stage {ev['index']}: {ev['name']} "
+                          f"({ev['episodes']} episodes)...", flush=True)
+                elif ev.get("event") == "stage_result":
+                    print(f"    return {ev['avg_return_trained']} (random {ev['avg_return_random']}), "
+                          f"depth {ev['avg_depth_trained']} (max {ev['max_depth_trained']}), "
+                          f"wins {ev['wins']}", flush=True)
+
+            episodes = args.episodes if args.episodes is not None else 3000
+            results, ws = run_campaign(episodes=episodes, on_event=on_stage)
+            best = max(r.max_depth_trained for r in results)
+            print(f"\nOK: campaign complete — {len(results)} stages, "
+                  f"deepest floor reached {best}, wins {sum(r.wins for r in results)}")
+            print(f"  report: {ws.path / 'report.md'}")
+            return 0
+        from .ml.rl.spd_campaign import challenge_mask
+        from .ml.rl.spd_real_train import run_spd_real_training
         episodes = args.episodes if args.episodes is not None else 4000
-        result, ws = run_spd_real_training(episodes=episodes, on_event=on_event)
+        result, ws = run_spd_real_training(
+            episodes=episodes, on_event=on_event,
+            hero=args.hero, challenges=challenge_mask(args.challenges),
+        )
         print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
         print(f"  deepest floor: trained {result.avg_depth_trained} vs random {result.avg_depth_random}")
     elif args.game == "spd":
@@ -189,6 +214,14 @@ def main(argv: list[str] | None = None) -> int:
                            "spd-real = the actual game via the headless Java bridge")
     p_rl.add_argument("--episodes", type=int, default=None,
                       help="training episodes (default: 12000 for spd, 4000 for sim/spd-real)")
+    p_rl.add_argument("--hero", default="warrior",
+                      choices=["warrior", "mage", "rogue", "huntress", "duelist", "cleric"],
+                      help="hero class (spd-real only)")
+    p_rl.add_argument("--challenges", type=int, default=0, metavar="N",
+                      help="enable the first N SPD challenges, 0-9 (spd-real only)")
+    p_rl.add_argument("--campaign", action="store_true",
+                      help="staged curriculum: long baseline, every hero class, "
+                           "then challenges 1..9 (spd-real only)")
 
     args = parser.parse_args(argv)
 

@@ -19,7 +19,8 @@ def _obs_line(**over) -> str:
         "depth": 1, "gold": 0, "enemies_visible": 0, "inventory_count": 4,
         "starving": 0, "has_ankh": 0, "hp_bin": 4, "enemy_dir": 0,
         "enemy_adjacent": 0, "stairs_dir": 0, "stairs_dist": -1, "has_heal": 0,
-        "cells_explored": 60, "turns": 0, "pos": 159, "done": False,
+        "cells_explored": 60, "has_amulet": 0, "won": 0,
+        "turns": 0, "pos": 159, "done": False,
     }
     base.update(over)
     return json.dumps(base) + "\n"
@@ -54,11 +55,11 @@ def test_reset_maps_observation_and_seeds():
     proc = FakeProc([_obs_line(), _obs_line()])
     env = SPDRealEnv(seed=100, proc=proc)
     obs = env.reset()
-    assert proc.commands == ["reset 100"]
+    assert proc.commands == ["reset 100 warrior 0"]
     assert obs["hp_current"] == 20 and obs["hp_bin"] == 4
     assert "done" not in obs and "turns" not in obs and "pos" not in obs
     env.reset()
-    assert proc.commands[-1] == "reset 101"      # fresh dungeon per episode
+    assert proc.commands[-1] == "reset 101 warrior 0"    # fresh dungeon per episode
 
 
 def test_unknown_stairs_maps_to_assumed_far():

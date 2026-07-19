@@ -81,6 +81,8 @@ def run_spd_real_training(
     seed: int = 0,
     max_steps: int = 600,
     eval_episodes: int = 30,
+    hero: str = "warrior",
+    challenges: int = 0,          # SPD challenge bitmask
     on_event: Optional[EventCb] = None,
 ) -> tuple[RLResult, MLWorkspace]:
     ws = MLWorkspace.create("Shattered Pixel Dungeon (REAL game)", base_dir=base_dir)
@@ -91,13 +93,14 @@ def run_spd_real_training(
     agent = QLearningAgent(SPDRealEnv.action_space, seed=seed)
     _emit(on_event, event="train", episodes=episodes, actions=SPDRealEnv.action_space)
 
-    with SPDRealEnv(seed=seed, max_steps=max_steps) as env:
+    kw = {"max_steps": max_steps, "hero": hero, "challenges": challenges}
+    with SPDRealEnv(seed=seed, **kw) as env:
         curve = train(env, agent, train_reward, episodes, featurizer=spd_featurizer)
 
-    with SPDRealEnv(seed=_EVAL_SEED, max_steps=max_steps) as env:
+    with SPDRealEnv(seed=_EVAL_SEED, **kw) as env:
         rt, st, dt = _evaluate(env, agent.policy, reward, eval_episodes)
     rng = random.Random(7)
-    with SPDRealEnv(seed=_EVAL_SEED, max_steps=max_steps) as env:
+    with SPDRealEnv(seed=_EVAL_SEED, **kw) as env:
         rr, sr, dr = _evaluate(env, lambda o: rng.choice(SPDRealEnv.action_space),
                                reward, eval_episodes)
 
