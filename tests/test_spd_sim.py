@@ -18,7 +18,11 @@ def test_obs_has_spd_fields():
     for f in ("hp_current", "hp_max", "depth", "enemies_visible", "inventory_count",
               "stairs_dir", "stairs_dist", "has_heal"):
         assert f in o
-    assert set(spd_featurizer(o)).issubset(set(o))  # featurizer is a subset of obs
+    # featurized keys come from the obs, or default to 0 for capability fields
+    # the sim doesn't model (has_food, wand_charges, gear_available, challenge_count)
+    feat = spd_featurizer(o)
+    for k, v in feat.items():
+        assert v == o.get(k, 0.0)
 
 
 def test_env_supports_descent():

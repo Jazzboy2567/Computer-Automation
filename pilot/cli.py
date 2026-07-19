@@ -136,24 +136,25 @@ def _rl(args) -> int:
             print("`gradlew :rlbridge:writeClasspath` there, or set SPD_CLONE_DIR.")
             return 1
         if args.campaign:
-            from .ml.rl.spd_campaign import run_campaign
+            from .ml.rl.spd_campaign import run_gated_campaign
 
             def on_stage(ev: dict) -> None:
                 if ev.get("event") == "workspace":
                     print(f"  workspace: {ev['path']}")
                 elif ev.get("event") == "stage":
-                    print(f"  stage {ev['index']}: {ev['name']} "
+                    print(f"  stage {ev['name']} attempt {ev['attempt']} "
                           f"({ev['episodes']} episodes)...", flush=True)
                 elif ev.get("event") == "stage_result":
                     print(f"    return {ev['avg_return_trained']} (random {ev['avg_return_random']}), "
                           f"depth {ev['avg_depth_trained']} (max {ev['max_depth_trained']}), "
                           f"wins {ev['wins']}", flush=True)
+                elif ev.get("event") == "track_done":
+                    print(f"  == {ev['hero']}: reached {ev['reached']}", flush=True)
 
             episodes = args.episodes if args.episodes is not None else 3000
-            results, ws = run_campaign(episodes=episodes, on_event=on_stage)
-            best = max(r.max_depth_trained for r in results)
-            print(f"\nOK: campaign complete — {len(results)} stages, "
-                  f"deepest floor reached {best}, wins {sum(r.wins for r in results)}")
+            tracks, ws = run_gated_campaign(episodes=episodes, on_event=on_stage)
+            summary = ", ".join(f"{t.hero}:{t.reached}" for t in tracks)
+            print(f"\nOK: gated campaign complete — {summary}")
             print(f"  report: {ws.path / 'report.md'}")
             return 0
         from .ml.rl.spd_campaign import challenge_mask
@@ -220,8 +221,8 @@ def main(argv: list[str] | None = None) -> int:
     p_rl.add_argument("--challenges", type=int, default=0, metavar="N",
                       help="enable the first N SPD challenges, 0-9 (spd-real only)")
     p_rl.add_argument("--campaign", action="store_true",
-                      help="staged curriculum: long baseline, every hero class, "
-                           "then challenges 1..9 (spd-real only)")
+                      help="gated curriculum: each class must WIN the base game, then "
+                           "challenges 1..9 in order, no jumps (spd-real only)")
 
     args = parser.parse_args(argv)
 
