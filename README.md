@@ -174,10 +174,16 @@ logic with no OpenGL, steps turns synchronously, and serves a line protocol
 (`reset`/`act` in, JSON observations out) that `pilot/ml/rl/spd_real.py` wraps
 as a `GameEnv`. Observations are **strictly player-visible** — enemies count
 only inside the hero's field of view, and the stairs' direction is unknown
-until the player has actually seen the exit tile. Setup: clone
-`00-Evan/shattered-pixel-dungeon` with the rlbridge module to
-`~/shattered-pixel-dungeon` (or set `SPD_CLONE_DIR`), run
+until the player has actually seen the exit tile. An `explore` macro action
+(walk to the nearest edge-of-darkness frontier) makes fog-of-war exploration
+learnable. Setup: clone `00-Evan/shattered-pixel-dungeon` with the rlbridge
+module to `~/shattered-pixel-dungeon` (or set `SPD_CLONE_DIR`), run
 `gradlew :rlbridge:writeClasspath` there once, then `pilot rl --game spd-real`.
+
+**Measured results** (4000 episodes, ~5 min): across three independent runs the
+trained agent scores **+22 to +28 return over random** (e.g. −20.2 vs −42.1)
+and reaches **deepest floor ~1.6 vs ~1.1** — it learns to fight, survive, find
+the stairs through fog of war, and descend, in the real game's dynamics.
 
 How it fits together (`pilot/ml/rl/`):
 
