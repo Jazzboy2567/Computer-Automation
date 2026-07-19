@@ -68,6 +68,8 @@ class StageResult:
     wins: int
     states_learned: int
     learning_curve: list[float] = field(default_factory=list)
+    best_depth: int = 0          # deepest single run (training or eval)
+    best_gear: str = ""          # the gear held on that run
 
 
 def default_stages(episodes: int) -> list[Stage]:
@@ -127,10 +129,13 @@ def run_campaign(
         with SPDRealEnv(seed=seed + i * 1_000_000, max_steps=max_steps,
                         hero=stage.hero, challenges=mask) as env:
             curve = train(env, agent, train_reward, stage.episodes, featurizer=spd_featurizer)
+            best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
 
         with SPDRealEnv(seed=_EVAL_SEED + i * 10_000, max_steps=max_steps,
                         hero=stage.hero, challenges=mask) as env:
             rt, dt, max_dt, wins = _evaluate(env, agent.policy, reward, eval_episodes)
+            if getattr(env, "best_depth", 0) > best_depth:
+                best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
         with SPDRealEnv(seed=_EVAL_SEED + i * 10_000, max_steps=max_steps,
                         hero=stage.hero, challenges=mask) as env:
             rr, dr, _, _ = _evaluate(
@@ -143,6 +148,7 @@ def run_campaign(
             avg_depth_trained=round(dt, 2), avg_depth_random=round(dr, 2),
             max_depth_trained=max_dt, wins=wins,
             states_learned=agent.states_learned, learning_curve=curve,
+            best_depth=best_depth, best_gear=best_gear,
         )
         results.append(result)
         joblib.dump(agent.Q, ws.model_dir / f"policy_{i:02d}_{stage.name}.joblib")
@@ -203,9 +209,12 @@ def run_gated_campaign(
                 with SPDRealEnv(seed=seed + stage_no * 1_000_000, max_steps=max_steps,
                                 hero=hero, challenges=mask) as env:
                     curve = train(env, agent, train_reward, episodes, featurizer=spd_featurizer)
+                    best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
                 with SPDRealEnv(seed=_EVAL_SEED + stage_no * 10_000, max_steps=max_steps,
                                 hero=hero, challenges=mask) as env:
                     rt, dt, max_dt, wins = _evaluate(env, agent.policy, reward, eval_episodes)
+                    if getattr(env, "best_depth", 0) > best_depth:
+                        best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
                 with SPDRealEnv(seed=_EVAL_SEED + stage_no * 10_000, max_steps=max_steps,
                                 hero=hero, challenges=mask) as env:
                     rr, dr, _, _ = _evaluate(
@@ -217,6 +226,7 @@ def run_gated_campaign(
                     avg_depth_trained=round(dt, 2), avg_depth_random=round(dr, 2),
                     max_depth_trained=max_dt, wins=wins,
                     states_learned=agent.states_learned, learning_curve=curve,
+                    best_depth=best_depth, best_gear=best_gear,
                 )
                 track.stages.append(result)
                 track.attempts[name] = attempt
@@ -252,9 +262,14 @@ def _gated_report(tracks: list[TrackResult]) -> str:
         "| --- | --- | --- | --- | --- |",
     ]
     for t in tracks:
-        best_depth = max((s.max_depth_trained for s in t.stages), default=1)
+        best_depth = max((max(s.max_depth_trained, s.best_depth) for s in t.stages), default=1)
         best_ret = max((s.avg_return_trained for s in t.stages), default=0)
         lines.append(f"| {t.hero} | {t.reached} | {best_depth} | {best_ret} | {len(t.stages)} |")
+    lines += ["", "## Best runs (deepest floor + gear held there)", ""]
+    for t in tracks:
+        best = max(t.stages, key=lambda s: s.best_depth, default=None)
+        if best and best.best_depth > 0:
+            lines.append(f"- **{t.hero}**: floor {best.best_depth} — {best.best_gear or '(starting kit)'}")
     lines += ["", "Per-stage detail lives in campaign.json.", ""]
     return "\n".join(lines) + "\n"
 
@@ -273,6 +288,10 @@ def _report(results: list[StageResult], reward: RewardSpec) -> str:
             f"| {r.avg_return_trained} ({r.avg_return_random}) "
             f"| {r.avg_depth_trained} ({r.avg_depth_random}) "
             f"| {r.max_depth_trained} | {r.wins} | {r.states_learned} |")
+    best = max(results, key=lambda r: r.best_depth, default=None)
+    if best and best.best_depth > 0:
+        lines += ["", f"**Deepest run:** floor {best.best_depth} ({best.name}) — "
+                      f"gear: {best.best_gear or '(starting kit)'}"]
     lines += [
         "",
         "> Honest scale note: finishing SPD outright is beyond a tabular Q-table;",

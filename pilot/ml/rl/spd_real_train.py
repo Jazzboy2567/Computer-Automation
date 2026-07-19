@@ -66,6 +66,8 @@ def _report(result: RLResult, reward: RewardSpec) -> str:
         f"| avg survival (actions) | {result.avg_survival_trained} | {result.avg_survival_random} |",
         f"| avg deepest floor | {result.avg_depth_trained} | {result.avg_depth_random} |",
         "",
+        f"**Best run:** floor {result.best_depth} — gear: {result.best_gear or '(starting kit)'}",
+        "",
         "## Reward spec (your good/bad events)", "",
         "```json", reward.model_dump_json(indent=2), "```", "",
         "## Learning curve (mean return per block)", "",
@@ -94,11 +96,15 @@ def run_spd_real_training(
     _emit(on_event, event="train", episodes=episodes, actions=SPDRealEnv.action_space)
 
     kw = {"max_steps": max_steps, "hero": hero, "challenges": challenges}
+    best_depth, best_gear = 0, ""
     with SPDRealEnv(seed=seed, **kw) as env:
         curve = train(env, agent, train_reward, episodes, featurizer=spd_featurizer)
+        best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
 
     with SPDRealEnv(seed=_EVAL_SEED, **kw) as env:
         rt, st, dt = _evaluate(env, agent.policy, reward, eval_episodes)
+        if getattr(env, "best_depth", 0) > best_depth:
+            best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
     rng = random.Random(7)
     with SPDRealEnv(seed=_EVAL_SEED, **kw) as env:
         rr, sr, dr = _evaluate(env, lambda o: rng.choice(SPDRealEnv.action_space),
@@ -114,6 +120,7 @@ def run_spd_real_training(
         improvement=round(rt - rr, 2), states_learned=agent.states_learned,
         learning_curve=curve, model_path=str(model_path),
         avg_depth_trained=round(dt, 2), avg_depth_random=round(dr, 2),
+        best_depth=best_depth, best_gear=best_gear,
     )
     ws.write_json("metrics.json", result.model_dump())
     ws.write_json("reward_spec.json", reward.model_dump())
