@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
@@ -46,6 +47,12 @@ def bridge_available(clone: Optional[Path] = None) -> bool:
     return (clone / "rlbridge" / "build" / "rlbridge.classpath").exists()
 
 
+def stderr_log_path() -> Path:
+    """Where the Java server's stderr goes — stack traces and the headless
+    safety net's recovered-exception reports end up here, not in a black hole."""
+    return Path(tempfile.gettempdir()) / f"spd_envserver_{os.getpid()}.log"
+
+
 def launch_server(clone: Optional[Path] = None) -> subprocess.Popen:
     """Start the Java EnvServer (compile first: `gradlew :rlbridge:writeClasspath`)."""
     clone = clone or clone_dir()
@@ -60,7 +67,7 @@ def launch_server(clone: Optional[Path] = None) -> subprocess.Popen:
         cwd=clone / "core" / "src" / "main" / "assets",   # Gdx.files.internal resolves here
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=open(stderr_log_path(), "a", encoding="utf-8"),   # appended across restarts
         text=True,
         encoding="utf-8",
     )
@@ -93,10 +100,12 @@ class SPDRealEnv(GameEnv):
         self._proc.stdin.flush()
         line = self._proc.stdout.readline()
         if not line:
-            raise RuntimeError("SPD EnvServer exited unexpectedly")
+            raise RuntimeError(f"SPD EnvServer exited unexpectedly (see {stderr_log_path()})")
         reply = json.loads(line)
         if "error" in reply:
-            raise RuntimeError(f"SPD EnvServer error: {reply['error']}")
+            raise RuntimeError(
+                f"SPD EnvServer error: {reply['error']} (see {stderr_log_path()})"
+            )
         return reply
 
     @staticmethod
