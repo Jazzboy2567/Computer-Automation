@@ -83,9 +83,16 @@ class SPDRealEnv(GameEnv):
 
     action_space = list(SPD_ACTIONS)
 
-    def __init__(self, seed: int = 0, max_steps: int = 600, proc: Any = None):
+    HEROES = ("warrior", "mage", "rogue", "huntress", "duelist", "cleric")
+
+    def __init__(self, seed: int = 0, max_steps: int = 600, proc: Any = None,
+                 hero: str = "warrior", challenges: int = 0):
+        if hero not in self.HEROES:
+            raise ValueError(f"unknown hero {hero!r}; one of {self.HEROES}")
         self.base_seed = seed
         self.max_steps = max_steps
+        self.hero = hero
+        self.challenges = challenges          # SPD challenge bitmask
         self.steps = 0
         self.episode = 0
         self._proc = proc or launch_server()
@@ -118,7 +125,7 @@ class SPDRealEnv(GameEnv):
     # ------------------------------------------------------------- GameEnv
     def reset(self) -> Observation:
         self.steps = 0
-        reply = self._send(f"reset {self.base_seed + self.episode}")
+        reply = self._send(f"reset {self.base_seed + self.episode} {self.hero} {self.challenges}")
         self.episode += 1
         return self._to_obs(reply)
 
@@ -127,7 +134,8 @@ class SPDRealEnv(GameEnv):
         reply = self._send(f"act {action}")
         obs = self._to_obs(reply)
         done = bool(reply.get("done")) or self.steps >= self.max_steps
-        info = {"depth": obs.get("depth", 1.0), "turns": reply.get("turns", 0)}
+        info = {"depth": obs.get("depth", 1.0), "turns": reply.get("turns", 0),
+                "won": bool(obs.get("won", 0.0))}
         return obs, done, info
 
     def close(self) -> None:

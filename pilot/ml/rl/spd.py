@@ -62,6 +62,8 @@ def spd_reward_spec() -> RewardSpec:
             RewardRule(field="depth", direction="up", weight=10.0),                         # descending = strong progress
             RewardRule(field="gold", direction="up", weight=0.01, per_unit=True),           # gold = good
             RewardRule(field="inventory_count", direction="up", weight=1.0),                # more items = good
+            RewardRule(field="has_amulet", direction="up", weight=200.0),                   # the Amulet of Yendor!
+            RewardRule(field="won", direction="up", weight=500.0),                          # finishing the game = best
         ],
         step_reward=0.05,           # small passive-survival bonus (kept low so camping isn't optimal)
         death_field="hp_current",
