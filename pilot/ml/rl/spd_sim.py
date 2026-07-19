@@ -199,9 +199,16 @@ class SPDGridEnv(GameEnv):
 
 # Compact decision-state the tabular agent learns over (reward still uses the
 # full observation). Keys are small ints so the Q-table stays tractable.
+# Capability keys (has_food, wand_charges, gear_available, challenge_count) make
+# item/gear timing LEARNABLE — the env never decides when to use them. Missing
+# keys (the sim doesn't emit capability fields) default to 0.
 _AGENT_KEYS = ("hp_bin", "enemies_visible", "enemy_dir", "enemy_adjacent",
-               "stairs_dir", "has_heal", "starving")
+               "stairs_dir", "has_heal", "starving",
+               "has_food", "wand_charges", "gear_available", "challenge_count")
 
 
 def spd_featurizer(obs: Observation) -> Observation:
-    return {k: obs[k] for k in _AGENT_KEYS}
+    feat = {k: obs.get(k, 0.0) for k in _AGENT_KEYS}
+    # cap charge counts so the table doesn't split hairs between big charge pools
+    feat["wand_charges"] = min(2.0, feat["wand_charges"])
+    return feat

@@ -93,7 +93,8 @@ def test_featurizer_accepts_real_observation():
     env = SPDRealEnv(proc=proc)
     feat = spd_featurizer(env.reset())
     assert set(feat) == {"hp_bin", "enemies_visible", "enemy_dir",
-                         "enemy_adjacent", "stairs_dir", "has_heal", "starving"}
+                         "enemy_adjacent", "stairs_dir", "has_heal", "starving",
+                         "has_food", "wand_charges", "gear_available", "challenge_count"}
 
 
 def test_explore_in_action_space_and_shaping_rewards_new_cells():

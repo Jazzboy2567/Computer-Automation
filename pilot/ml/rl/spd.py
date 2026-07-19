@@ -32,15 +32,19 @@ SPD_OBSERVATION_FIELDS: dict[str, str] = {
     # Status effects (buffs/debuffs) are read via the magnifying-glass examine.
 }
 
-# Discrete actions, performed as mouse clicks via the ActionDriver (turn-based).
+# Discrete actions. Capabilities only — WHEN to use each is the agent's to
+# learn, never scripted (the project's no-hardcoding rule).
 SPD_ACTIONS: list[str] = [
     "move_n", "move_s", "move_e", "move_w",   # step toward an adjacent tile
-    "attack_nearest",                          # click the nearest visible enemy
+    "attack_nearest",                          # melee the nearest visible enemy
     "search",                                  # magnifying glass (find hidden things / examine)
     "pickup",                                  # step onto / grab loot on the tile
-    "descend",                                 # take the down-stairs
-    "use_item",                                # use the best consumable (e.g. heal when low)
+    "descend",                                 # take the down-stairs (holding the Amulet: finish)
+    "use_item",                                # drink a healing potion (poison under some challenges!)
     "explore",                                 # walk to the nearest unexplored area (tap the dark)
+    "eat_food",                                # eat carried food
+    "zap_wand",                                # cast a charged wand at the nearest visible enemy
+    "equip_gear",                              # one gear-progression step (equip/strength/upgrade)
     "wait",                                    # pass a turn (passive regen)
 ]
 

@@ -155,6 +155,110 @@ def run_campaign(
     return results, ws
 
 
+@dataclass
+class TrackResult:
+    hero: str
+    reached: int            # -1 = still on base game; 0..9 = highest challenge COMPLETED
+    attempts: dict[str, int] = field(default_factory=dict)
+    stages: list[StageResult] = field(default_factory=list)
+
+
+def run_gated_campaign(
+    episodes: int = 3000,
+    heroes: tuple[str, ...] = SPDRealEnv.HEROES,
+    max_attempts: int = 2,
+    base_dir: Optional[Path] = None,
+    seed: int = 0,
+    max_steps: int = 900,
+    eval_episodes: int = 25,
+    on_event: Optional[EventCb] = None,
+) -> tuple[list[TrackResult], MLWorkspace]:
+    """Matthew's program: each class beats the base game, then challenge 1, then
+    2, ... up to 9 — no jumps. Advancement is gated on an actual WIN (a run
+    finished holding the Amulet). A stage that fails its gate is retrained up to
+    `max_attempts` times; if still unbeaten the class's track halts there and the
+    report says exactly where. The Q-table carries across everything.
+    """
+    ws = MLWorkspace.create("SPD gated campaign (win to advance)", base_dir=base_dir)
+    if on_event:
+        on_event({"event": "workspace", "path": str(ws.path)})
+
+    reward = spd_reward_spec()
+    train_reward = spd_training_reward()
+    agent = QLearningAgent(SPDRealEnv.action_space, seed=seed)
+    rng = random.Random(7)
+    tracks: list[TrackResult] = []
+    stage_no = 0
+
+    for hero in heroes:
+        track = TrackResult(hero=hero, reached=-1)
+        for chal in range(0, 10):
+            name = f"{hero}-chal{chal}"
+            passed = False
+            for attempt in range(1, max_attempts + 1):
+                if on_event:
+                    on_event({"event": "stage", "name": name, "attempt": attempt,
+                              "episodes": episodes})
+                mask = challenge_mask(chal)
+                with SPDRealEnv(seed=seed + stage_no * 1_000_000, max_steps=max_steps,
+                                hero=hero, challenges=mask) as env:
+                    curve = train(env, agent, train_reward, episodes, featurizer=spd_featurizer)
+                with SPDRealEnv(seed=_EVAL_SEED + stage_no * 10_000, max_steps=max_steps,
+                                hero=hero, challenges=mask) as env:
+                    rt, dt, max_dt, wins = _evaluate(env, agent.policy, reward, eval_episodes)
+                with SPDRealEnv(seed=_EVAL_SEED + stage_no * 10_000, max_steps=max_steps,
+                                hero=hero, challenges=mask) as env:
+                    rr, dr, _, _ = _evaluate(
+                        env, lambda o: rng.choice(SPDRealEnv.action_space), reward, eval_episodes)
+
+                result = StageResult(
+                    name=f"{name}-a{attempt}", hero=hero, challenges=chal, episodes=episodes,
+                    avg_return_trained=round(rt, 2), avg_return_random=round(rr, 2),
+                    avg_depth_trained=round(dt, 2), avg_depth_random=round(dr, 2),
+                    max_depth_trained=max_dt, wins=wins,
+                    states_learned=agent.states_learned, learning_curve=curve,
+                )
+                track.stages.append(result)
+                track.attempts[name] = attempt
+                stage_no += 1
+                joblib.dump(agent.Q, ws.model_dir / "policy.joblib")
+                ws.write_json("campaign.json",
+                              [{**t.__dict__, "stages": [s.__dict__ for s in t.stages]}
+                               for t in tracks + [track]])
+                ws.write_text("report.md", _gated_report(tracks + [track]))
+                if on_event:
+                    on_event({"event": "stage_result", **result.__dict__})
+                if wins > 0:
+                    passed = True
+                    break
+            if passed:
+                track.reached = chal
+            else:
+                break   # no jumps: the track halts at the first unbeaten gate
+        tracks.append(track)
+        if on_event:
+            on_event({"event": "track_done", "hero": hero, "reached": track.reached})
+
+    ws.write_text("report.md", _gated_report(tracks))
+    return tracks, ws
+
+
+def _gated_report(tracks: list[TrackResult]) -> str:
+    lines = [
+        "# SPD gated campaign — win to advance (per class, challenges 0→9, no jumps)", "",
+        "Gate = a run finished holding the Amulet. `reached` is the highest",
+        "challenge level COMPLETED (-1 = base game not yet beaten).", "",
+        "| hero | reached | best depth | best return | stages run |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for t in tracks:
+        best_depth = max((s.max_depth_trained for s in t.stages), default=1)
+        best_ret = max((s.avg_return_trained for s in t.stages), default=0)
+        lines.append(f"| {t.hero} | {t.reached} | {best_depth} | {best_ret} | {len(t.stages)} |")
+    lines += ["", "Per-stage detail lives in campaign.json.", ""]
+    return "\n".join(lines) + "\n"
+
+
 def _report(results: list[StageResult], reward: RewardSpec) -> str:
     lines = [
         "# SPD campaign — win the game, all heroes, challenges 0→9", "",
