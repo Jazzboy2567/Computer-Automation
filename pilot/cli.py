@@ -152,7 +152,8 @@ def _rl(args) -> int:
                     print(f"  == {ev['hero']}: reached {ev['reached']}", flush=True)
 
             episodes = args.episodes if args.episodes is not None else 3000
-            tracks, ws = run_gated_campaign(episodes=episodes, on_event=on_stage)
+            tracks, ws = run_gated_campaign(episodes=episodes, on_event=on_stage,
+                                            agent_kind=args.agent)
             summary = ", ".join(f"{t.hero}:{t.reached}" for t in tracks)
             print(f"\nOK: gated campaign complete — {summary}")
             print(f"  report: {ws.path / 'report.md'}")
@@ -163,6 +164,7 @@ def _rl(args) -> int:
         result, ws = run_spd_real_training(
             episodes=episodes, on_event=on_event,
             hero=args.hero, challenges=challenge_mask(args.challenges),
+            agent_kind=args.agent,
         )
         print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
         print(f"  deepest floor: trained {result.avg_depth_trained} vs random {result.avg_depth_random}")
@@ -223,6 +225,9 @@ def main(argv: list[str] | None = None) -> int:
     p_rl.add_argument("--campaign", action="store_true",
                       help="gated curriculum: each class must WIN the base game, then "
                            "challenges 1..9 in order, no jumps (spd-real only)")
+    p_rl.add_argument("--agent", default="table", choices=["table", "dqn"],
+                      help="table = tabular Q-learning (compact features); "
+                           "dqn = neural net over the full observation (generalizes)")
 
     args = parser.parse_args(argv)
 

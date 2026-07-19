@@ -204,7 +204,9 @@ class SPDGridEnv(GameEnv):
 # keys (the sim doesn't emit capability fields) default to 0.
 _AGENT_KEYS = ("hp_bin", "enemies_visible", "enemy_dir", "enemy_adjacent",
                "stairs_dir", "has_heal", "starving",
-               "has_food", "wand_charges", "gear_available", "challenge_count")
+               "has_food", "wand_charges", "gear_available", "challenge_count",
+               "enemy_unaware", "has_missile", "loot_here", "has_bow",
+               "has_unknown_potion", "has_unknown_scroll")
 
 
 def spd_featurizer(obs: Observation) -> Observation:

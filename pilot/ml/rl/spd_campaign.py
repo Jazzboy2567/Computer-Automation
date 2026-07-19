@@ -81,13 +81,14 @@ def default_stages(episodes: int) -> list[Stage]:
     return stages
 
 
-def _evaluate(env: SPDRealEnv, policy, reward: RewardSpec, episodes: int):
+def _evaluate(env: SPDRealEnv, policy, reward: RewardSpec, episodes: int,
+              feat=spd_featurizer):
     rets, depths, wins, max_depth = [], [], 0, 1
     for _ in range(episodes):
         obs = env.reset()
         done, total, deepest = False, 0.0, 1
         while not done:
-            nxt, done, info = env.step(policy(spd_featurizer(obs)))
+            nxt, done, info = env.step(policy(feat(obs)))
             total += reward.compute(obs, nxt, done, info)
             obs = nxt
             deepest = max(deepest, int(info.get("depth", 1)))
@@ -106,6 +107,7 @@ def run_campaign(
     seed: int = 0,
     max_steps: int = 900,
     eval_episodes: int = 25,
+    agent_kind: str = "table",
     on_event: Optional[EventCb] = None,
 ) -> tuple[list[StageResult], MLWorkspace]:
     ws = MLWorkspace.create("SPD campaign (win the game / classes / challenges)", base_dir=base_dir)
@@ -115,7 +117,8 @@ def run_campaign(
     stages = stages or default_stages(episodes)
     reward = spd_reward_spec()
     train_reward = spd_training_reward()
-    agent = QLearningAgent(SPDRealEnv.action_space, seed=seed)   # carried across stages
+    from .spd_real_train import make_agent
+    agent, feat = make_agent(agent_kind, SPDRealEnv.action_space, seed)   # carried across stages
     results: list[StageResult] = []
     rng = random.Random(7)
 
@@ -128,12 +131,12 @@ def run_campaign(
 
         with SPDRealEnv(seed=seed + i * 1_000_000, max_steps=max_steps,
                         hero=stage.hero, challenges=mask) as env:
-            curve = train(env, agent, train_reward, stage.episodes, featurizer=spd_featurizer)
+            curve = train(env, agent, train_reward, stage.episodes, featurizer=feat)
             best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
 
         with SPDRealEnv(seed=_EVAL_SEED + i * 10_000, max_steps=max_steps,
                         hero=stage.hero, challenges=mask) as env:
-            rt, dt, max_dt, wins = _evaluate(env, agent.policy, reward, eval_episodes)
+            rt, dt, max_dt, wins = _evaluate(env, agent.policy, reward, eval_episodes, feat=feat)
             if getattr(env, "best_depth", 0) > best_depth:
                 best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
         with SPDRealEnv(seed=_EVAL_SEED + i * 10_000, max_steps=max_steps,
@@ -177,6 +180,7 @@ def run_gated_campaign(
     seed: int = 0,
     max_steps: int = 900,
     eval_episodes: int = 25,
+    agent_kind: str = "table",
     on_event: Optional[EventCb] = None,
 ) -> tuple[list[TrackResult], MLWorkspace]:
     """Matthew's program: each class beats the base game, then challenge 1, then
@@ -191,7 +195,8 @@ def run_gated_campaign(
 
     reward = spd_reward_spec()
     train_reward = spd_training_reward()
-    agent = QLearningAgent(SPDRealEnv.action_space, seed=seed)
+    from .spd_real_train import make_agent
+    agent, feat = make_agent(agent_kind, SPDRealEnv.action_space, seed)
     rng = random.Random(7)
     tracks: list[TrackResult] = []
     stage_no = 0
@@ -208,11 +213,11 @@ def run_gated_campaign(
                 mask = challenge_mask(chal)
                 with SPDRealEnv(seed=seed + stage_no * 1_000_000, max_steps=max_steps,
                                 hero=hero, challenges=mask) as env:
-                    curve = train(env, agent, train_reward, episodes, featurizer=spd_featurizer)
+                    curve = train(env, agent, train_reward, episodes, featurizer=feat)
                     best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
                 with SPDRealEnv(seed=_EVAL_SEED + stage_no * 10_000, max_steps=max_steps,
                                 hero=hero, challenges=mask) as env:
-                    rt, dt, max_dt, wins = _evaluate(env, agent.policy, reward, eval_episodes)
+                    rt, dt, max_dt, wins = _evaluate(env, agent.policy, reward, eval_episodes, feat=feat)
                     if getattr(env, "best_depth", 0) > best_depth:
                         best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
                 with SPDRealEnv(seed=_EVAL_SEED + stage_no * 10_000, max_steps=max_steps,
