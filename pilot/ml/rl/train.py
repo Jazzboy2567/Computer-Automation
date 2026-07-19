@@ -40,6 +40,9 @@ class RLResult(BaseModel):
     # Dungeon depth reached (SPD training only; None for the toy sim).
     avg_depth_trained: Optional[float] = None
     avg_depth_random: Optional[float] = None
+    # Best single run seen (training or eval): deepest floor + the gear held there.
+    best_depth: Optional[int] = None
+    best_gear: Optional[str] = None
 
     def headline(self) -> str:
         return f"avg return {self.avg_return_trained:.1f} (random {self.avg_return_random:.1f})"

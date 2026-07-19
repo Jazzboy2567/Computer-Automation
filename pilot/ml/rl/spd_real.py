@@ -34,7 +34,7 @@ DEFAULT_CLONE = Path.home() / "shattered-pixel-dungeon"
 UNKNOWN_STAIRS_DIST = 30.0
 
 # Reported by the server but not part of the agent's observation.
-_INFO_FIELDS = ("done", "turns", "pos")
+_INFO_FIELDS = ("done", "turns", "pos", "gear")
 
 
 def clone_dir() -> Path:
@@ -70,6 +70,7 @@ def launch_server(clone: Optional[Path] = None) -> subprocess.Popen:
         stderr=open(stderr_log_path(), "a", encoding="utf-8"),   # appended across restarts
         text=True,
         encoding="utf-8",
+        errors="replace",   # a dying JVM must surface as a protocol error, not a decode crash
     )
 
 
@@ -95,6 +96,9 @@ class SPDRealEnv(GameEnv):
         self.challenges = challenges          # SPD challenge bitmask
         self.steps = 0
         self.episode = 0
+        # best run served by this env instance (training or eval), for reporting
+        self.best_depth = 0
+        self.best_gear = ""
         self._proc = proc or launch_server()
 
     def observation_fields(self) -> list[str]:
@@ -135,7 +139,11 @@ class SPDRealEnv(GameEnv):
         obs = self._to_obs(reply)
         done = bool(reply.get("done")) or self.steps >= self.max_steps
         info = {"depth": obs.get("depth", 1.0), "turns": reply.get("turns", 0),
-                "won": bool(obs.get("won", 0.0))}
+                "won": bool(obs.get("won", 0.0)), "gear": reply.get("gear", "")}
+        depth = int(obs.get("depth", 1))
+        if depth > self.best_depth:
+            self.best_depth = depth
+            self.best_gear = info["gear"]
         return obs, done, info
 
     def close(self) -> None:
