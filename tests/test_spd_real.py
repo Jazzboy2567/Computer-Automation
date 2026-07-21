@@ -135,6 +135,24 @@ def test_identifying_an_item_type_is_rewarded():
     assert reward.compute({"hp_current": 20.0}, {"hp_current": 20.0}, False, {}) == flat
 
 
+def test_gear_improvement_rewarded_only_early():
+    from pilot.ml.rl.spd import spd_training_reward
+
+    reward = spd_training_reward()
+    # equipping a better weapon early (floor 2): gear_score rises -> pays
+    early = reward.compute({"gear_score": 1.0, "hp_current": 20.0, "depth": 2.0},
+                           {"gear_score": 3.0, "hp_current": 20.0, "depth": 2.0}, False, {})
+    flat = reward.compute({"gear_score": 1.0, "hp_current": 20.0, "depth": 2.0},
+                          {"gear_score": 1.0, "hp_current": 20.0, "depth": 2.0}, False, {})
+    assert early > flat
+    # the SAME improvement deep (floor 12) is inert — no reward to churn a build
+    late = reward.compute({"gear_score": 1.0, "hp_current": 20.0, "depth": 12.0},
+                          {"gear_score": 3.0, "hp_current": 20.0, "depth": 12.0}, False, {})
+    late_flat = reward.compute({"gear_score": 1.0, "hp_current": 20.0, "depth": 12.0},
+                               {"gear_score": 1.0, "hp_current": 20.0, "depth": 12.0}, False, {})
+    assert late == late_flat
+
+
 def test_close_sends_quit():
     proc = FakeProc([_obs_line()])
     env = SPDRealEnv(proc=proc)
