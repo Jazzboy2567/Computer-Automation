@@ -67,6 +67,10 @@ def test_capability_actions_and_features():
     # capabilities exist as actions; judgment stays with the agent
     for action in ("eat_food", "zap_wand", "equip_gear"):
         assert action in SPD_ACTIONS and action in SPDRealEnv.action_space
+    # gear progression is FOUR separate decisions (no bundling macro), so the
+    # agent learns spend-now vs save-up rather than the engine forcing an order
+    for action in ("equip_gear", "equip_misc", "drink_strength", "read_upgrade"):
+        assert action in SPD_ACTIONS and action in SPDRealEnv.action_space
     # capability state is featurized (learnable), defaulting to 0 for the sim
     feat = spd_featurizer({"hp_bin": 4, "enemies_visible": 1, "enemy_dir": 3,
                            "enemy_adjacent": 0, "stairs_dir": 0, "has_heal": 0,

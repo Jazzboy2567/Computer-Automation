@@ -199,18 +199,27 @@ class SPDGridEnv(GameEnv):
 
 # Compact decision-state the tabular agent learns over (reward still uses the
 # full observation). Keys are small ints so the Q-table stays tractable.
-# Capability keys (has_food, wand_charges, gear_available, challenge_count) make
-# item/gear timing LEARNABLE — the env never decides when to use them. Missing
-# keys (the sim doesn't emit capability fields) default to 0.
+# Capability keys (has_food, wand_charges, gear_available, ...) make item/gear
+# timing LEARNABLE — the env never decides when to use them. The gear-progression
+# keys (str_potions, upgrade_scrolls, cursed_equipped, misc_available) let the
+# agent learn spend-now vs bank-and-swing without any of it being scripted.
+# Missing keys (the sim doesn't emit capability fields) default to 0.
 _AGENT_KEYS = ("hp_bin", "enemies_visible", "enemy_dir", "enemy_adjacent",
                "stairs_dir", "has_heal", "starving",
                "has_food", "wand_charges", "gear_available", "challenge_count",
                "enemy_unaware", "has_missile", "loot_here", "has_bow",
-               "has_unknown_potion", "has_unknown_scroll")
+               "has_unknown_potion", "has_unknown_scroll",
+               "str_potions", "upgrade_scrolls", "cursed_equipped",
+               "misc_available", "frontier_left")
+
+# Counts are capped so the table doesn't split hairs between large pools; the
+# cap on upgrade_scrolls is generous (3) because "do I have a stack worth saving?"
+# is exactly the distinction the agent needs for the bank-the-scrolls strategy.
+_CAPS = {"wand_charges": 2.0, "str_potions": 2.0, "upgrade_scrolls": 3.0}
 
 
 def spd_featurizer(obs: Observation) -> Observation:
     feat = {k: obs.get(k, 0.0) for k in _AGENT_KEYS}
-    # cap charge counts so the table doesn't split hairs between big charge pools
-    feat["wand_charges"] = min(2.0, feat["wand_charges"])
+    for k, cap in _CAPS.items():
+        feat[k] = min(cap, feat[k])
     return feat
