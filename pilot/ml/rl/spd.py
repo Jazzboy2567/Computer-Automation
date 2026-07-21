@@ -79,7 +79,12 @@ def spd_reward_spec() -> RewardSpec:
             RewardRule(field="has_amulet", direction="up", weight=200.0),                   # the Amulet of Yendor!
             RewardRule(field="won", direction="up", weight=500.0),                          # finishing the game = best
         ],
-        step_reward=0.05,           # small passive-survival bonus (kept low so camping isn't optimal)
+        # No flat survival bonus. A +0.05/step bonus quietly paid the agent to
+        # STALL — surviving ~490 turns on floor 1 banked ~+24 and beat the risk
+        # of a descent that might end in the death penalty, so a DQN run collapsed
+        # to a do-nothing policy. Survival is now incentivised only by NOT dying
+        # (the death penalty) and by staying alive to earn more PROGRESS reward.
+        step_reward=0.0,
         death_field="hp_current",
         death_threshold=0.0,
         death_reward=-50.0,         # death = worst (an Ankh would soften this — future work)
