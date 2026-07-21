@@ -102,5 +102,13 @@ def spd_training_reward() -> RewardSpec:
         # stairs). Un-farmable: cells_explored only ever grows. The sim doesn't
         # emit the field, so this rule is inert there (missing field = 0 delta).
         RewardRule(field="cells_explored", direction="up", weight=0.05, per_unit=True),
+        # Information gain: identifying an item TYPE (drink an unknown potion,
+        # read an unknown scroll, zap an unknown wand, wear a ring) pays out, so
+        # the agent learns the ID gamble is worth the risk instead of hoarding
+        # mystery items it can never knowingly use. The poison/curse/death costs
+        # stay in the base reward, so it must LEARN which gambles are worth it —
+        # nothing here scripts what to identify or when. Un-farmable: the count
+        # only rises within a run and resets each game.
+        RewardRule(field="known_item_types", direction="up", weight=3.0, per_unit=True),
     ]
     return base.model_copy(update={"rules": base.rules + shaping})

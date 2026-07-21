@@ -115,6 +115,26 @@ def test_explore_in_action_space_and_shaping_rewards_new_cells():
     assert reward.compute({"hp_current": 20.0}, {"hp_current": 20.0}, False, {}) == flat
 
 
+def test_identifying_an_item_type_is_rewarded():
+    from pilot.ml.rl.spd import spd_training_reward
+
+    reward = spd_training_reward()
+    prev = {"known_item_types": 2.0, "hp_current": 20.0}
+    flat = reward.compute(prev, dict(prev), False, {})
+    identified = reward.compute(prev, {"known_item_types": 3.0, "hp_current": 20.0}, False, {})
+    assert identified > flat                       # learning what an item does pays
+    # surviving the gamble (even at some HP cost) still nets positive — that's the
+    # point, the agent should be WILLING to drink the mystery potion
+    hurt = reward.compute(prev, {"known_item_types": 3.0, "hp_current": 12.0}, False, {})
+    assert hurt > flat
+    # but a potion that IDs itself by KILLING you is dominated by the death
+    # penalty, so recklessness at low HP is still punished — nuance the agent must learn
+    lethal = reward.compute(prev, {"known_item_types": 3.0, "hp_current": 0.0}, True, {})
+    assert lethal < flat
+    # inert where the field is absent (the sim never emits it)
+    assert reward.compute({"hp_current": 20.0}, {"hp_current": 20.0}, False, {}) == flat
+
+
 def test_close_sends_quit():
     proc = FakeProc([_obs_line()])
     env = SPDRealEnv(proc=proc)
