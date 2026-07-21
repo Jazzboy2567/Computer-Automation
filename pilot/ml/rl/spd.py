@@ -115,5 +115,12 @@ def spd_training_reward() -> RewardSpec:
         # nothing here scripts what to identify or when. Un-farmable: the count
         # only rises within a run and resets each game.
         RewardRule(field="known_item_types", direction="up", weight=3.0, per_unit=True),
+        # A SLIGHT nudge to TRY better gear early: pays when equipped weapon/armor
+        # tier or (known) upgrade level rises — a real improvement, not a lateral
+        # swap. Gated to floors 1-10 (Matthew: once a build is going, switching
+        # gear isn't the best), and small enough that survival/depth still lead.
+        # The agent still learns WHICH gear and WHEN; this only makes trying it on
+        # worth the detour now that stalling earns nothing.
+        RewardRule(field="gear_score", direction="up", weight=1.5, per_unit=True, max_depth=10),
     ]
     return base.model_copy(update={"rules": base.rules + shaping})

@@ -8,7 +8,7 @@ agent works on any game once you describe its good/bad events.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -22,8 +22,15 @@ class RewardRule(BaseModel):
     direction: Literal["up", "down"]
     weight: float
     per_unit: bool = False  # scale weight by the magnitude of the change
+    # Optional depth gate: the rule is inert once `depth` exceeds this. Used to
+    # confine an early-game incentive (e.g. "try new gear on") to shallow floors
+    # so it doesn't push behaviour the player wouldn't want deep (swapping a
+    # settled build). Inert where the observation has no `depth`.
+    max_depth: Optional[float] = None
 
     def value(self, prev: Observation, cur: Observation) -> float:
+        if self.max_depth is not None and cur.get("depth", 0.0) > self.max_depth:
+            return 0.0
         d = cur.get(self.field, 0.0) - prev.get(self.field, 0.0)
         if self.direction == "up" and d > 0:
             return self.weight * (d if self.per_unit else 1.0)
