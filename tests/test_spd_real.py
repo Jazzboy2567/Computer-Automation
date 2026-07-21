@@ -153,6 +153,18 @@ def test_gear_improvement_rewarded_only_early():
     assert late == late_flat
 
 
+def test_wasted_action_is_penalized():
+    from pilot.ml.rl.spd import spd_training_reward
+
+    reward = spd_training_reward()
+    prev = {"hp_current": 20.0, "depth": 1.0}
+    effective = reward.compute(prev, {"hp_current": 20.0, "depth": 1.0, "action_wasted": 0}, False, {})
+    wasted = reward.compute(prev, {"hp_current": 20.0, "depth": 1.0, "action_wasted": 1}, False, {})
+    assert wasted < effective          # spamming an impossible no-op costs
+    # the sim never emits the field -> no accidental penalty there
+    assert reward.compute(prev, {"hp_current": 20.0, "depth": 1.0}, False, {}) == effective
+
+
 def test_close_sends_quit():
     proc = FakeProc([_obs_line()])
     env = SPDRealEnv(proc=proc)
