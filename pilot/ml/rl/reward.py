@@ -47,11 +47,18 @@ class RewardSpec(BaseModel):
     death_field: str = "player_health"
     death_threshold: float = 0.0
     death_reward: float = 0.0         # applied once when done & field <= threshold
+    # A per-step cost when the chosen action accomplished nothing (`waste_field`
+    # is truthy in the resulting observation). Keeps an impossible action from
+    # being a "free" no-op a value-overestimating policy can collapse onto.
+    waste_field: str = ""
+    waste_penalty: float = 0.0
 
     def compute(self, prev: Observation, cur: Observation, done: bool, info: dict) -> float:
         r = self.step_reward
         for rule in self.rules:
             r += rule.value(prev, cur)
+        if self.waste_field and cur.get(self.waste_field, 0.0) >= 1.0:
+            r += self.waste_penalty
         if done and cur.get(self.death_field, self.death_threshold + 1.0) <= self.death_threshold:
             r += self.death_reward
         return r

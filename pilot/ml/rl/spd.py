@@ -85,6 +85,12 @@ def spd_reward_spec() -> RewardSpec:
         # to a do-nothing policy. Survival is now incentivised only by NOT dying
         # (the death penalty) and by staying alive to earn more PROGRESS reward.
         step_reward=0.0,
+        # A wasted action (impossible → degraded to a rest) costs a little, so a
+        # policy can't hide by spamming an impossible no-op (a DQN run collapsed
+        # to descend-with-no-stairs-found, ~a wait, and stopped progressing).
+        # Small: an occasional failed try is nearly free; only SPAM is punished.
+        waste_field="action_wasted",
+        waste_penalty=-0.05,
         death_field="hp_current",
         death_threshold=0.0,
         death_reward=-50.0,         # death = worst (an Ankh would soften this — future work)
