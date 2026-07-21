@@ -98,7 +98,7 @@ def test_featurizer_accepts_real_observation():
                          "enemy_unaware", "has_missile", "loot_here", "has_bow",
                          "has_unknown_potion", "has_unknown_scroll",
                          "str_potions", "upgrade_scrolls", "cursed_equipped",
-                         "misc_available", "frontier_left"}
+                         "misc_available", "frontier_left", "loot_visible"}
 
 
 def test_explore_in_action_space_and_shaping_rewards_new_cells():
