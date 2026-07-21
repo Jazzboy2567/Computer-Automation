@@ -166,8 +166,15 @@ class DQNAgent:
         nxts = np.stack([self._buffer[i][3] for i in batch])
         dones = np.array([self._buffer[i][4] for i in batch], bool)
 
+        # Double DQN: the ONLINE net selects the next action, the TARGET net
+        # evaluates it. Vanilla `max` over the target net systematically
+        # overestimates action values, which here let the policy collapse onto a
+        # single over-valued action (throw_item ~ a safe no-op) and stop
+        # descending. Decoupling selection from evaluation curbs that.
+        next_acts = self._net.forward(nxts)[0].argmax(1)
         q_next, _ = self._target.forward(nxts)
-        targets = rews + np.where(dones, 0.0, self.gamma * q_next.max(1))
+        q_next_sel = q_next[np.arange(len(batch)), next_acts]
+        targets = rews + np.where(dones, 0.0, self.gamma * q_next_sel)
 
         q, cache = self._net.forward(xs)
         dq = np.zeros_like(q)
