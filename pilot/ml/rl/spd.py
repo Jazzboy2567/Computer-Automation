@@ -44,7 +44,13 @@ SPD_ACTIONS: list[str] = [
     "explore",                                 # walk to the nearest unexplored area (tap the dark)
     "eat_food",                                # eat carried food
     "zap_wand",                                # cast a charged wand at the nearest visible enemy
-    "equip_gear",                              # one gear-progression step (equip/strength/upgrade)
+    # gear progression — FOUR separate decisions, never one macro, so the agent
+    # (not the engine) learns the timing: spend an upgrade now vs bank six for a
+    # big weapon, drink strength on find vs hold it, equip an upgrade vs a ring
+    "equip_gear",                              # wear a strictly-better weapon/armor you have the STR for
+    "equip_misc",                              # put on a ring/artifact if a trinket slot is free
+    "drink_strength",                          # drink an identified Potion of Strength (+1 STR, permanent)
+    "read_upgrade",                            # read an identified Scroll of Upgrade (targets your weapon)
     "throw_item",                              # throw the best missile weapon at the nearest visible enemy
     "shoot_bow",                               # fire the Spirit Bow (huntress) at the nearest visible enemy
     "quaff_unknown",                           # drink an unidentified potion (the ID gamble)
