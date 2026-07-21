@@ -210,7 +210,7 @@ _AGENT_KEYS = ("hp_bin", "enemies_visible", "enemy_dir", "enemy_adjacent",
                "enemy_unaware", "has_missile", "loot_here", "has_bow",
                "has_unknown_potion", "has_unknown_scroll",
                "str_potions", "upgrade_scrolls", "cursed_equipped",
-               "misc_available", "frontier_left")
+               "misc_available", "frontier_left", "loot_visible")
 
 # Counts are capped so the table doesn't split hairs between large pools; the
 # cap on upgrade_scrolls is generous (3) because "do I have a stack worth saving?"
