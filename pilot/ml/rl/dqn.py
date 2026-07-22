@@ -96,6 +96,7 @@ class DQNAgent:
         self._rng = random.Random(seed)
         self._nprng = np.random.default_rng(seed)
         self._keys: Optional[list[str]] = None
+        self._array_keys: list[str] = []
         self._scale: Optional[np.ndarray] = None
         self._net: Optional[_MLP] = None
         self._target: Optional[_MLP] = None
@@ -107,12 +108,21 @@ class DQNAgent:
     # ------------------------------------------------------------ features
     def _vec(self, obs: Observation) -> np.ndarray:
         if self._keys is None:
-            self._keys = sorted(obs.keys())
-            self._scale = np.ones(len(self._keys), np.float32)
-            self._net = _MLP(len(self._keys), len(self.actions), self._hidden, self._nprng)
-            self._target = _MLP(len(self._keys), len(self.actions), self._hidden, self._nprng)
+            # scalar fields feed the vector by name; array fields (e.g. the
+            # egocentric `map` planes) are appended flat, in sorted key order
+            self._keys = sorted(k for k, v in obs.items()
+                                if not isinstance(v, (list, tuple, np.ndarray)))
+            self._array_keys = sorted(k for k, v in obs.items()
+                                      if isinstance(v, (list, tuple, np.ndarray)))
+            n_in = len(self._keys) + sum(len(obs[k]) for k in self._array_keys)
+            self._scale = np.ones(n_in, np.float32)
+            self._net = _MLP(n_in, len(self.actions), self._hidden, self._nprng)
+            self._target = _MLP(n_in, len(self.actions), self._hidden, self._nprng)
             self._target.copy_from(self._net)
-        x = np.array([float(obs.get(k, 0.0)) for k in self._keys], np.float32)
+        parts = [np.array([float(obs.get(k, 0.0)) for k in self._keys], np.float32)]
+        for k in self._array_keys:
+            parts.append(np.asarray(obs[k], np.float32))
+        x = np.concatenate(parts) if len(parts) > 1 else parts[0]
         np.maximum(self._scale, np.abs(x), out=self._scale)   # running max magnitude
         return x / self._scale
 
@@ -126,7 +136,7 @@ class DQNAgent:
         """Serializable snapshot (joblib): weights + feature schema."""
         if self._net is None:
             return {}
-        return {"keys": self._keys, "scale": self._scale,
+        return {"keys": self._keys, "array_keys": self._array_keys, "scale": self._scale,
                 "params": {k: v.copy() for k, v in self._net.params.items()},
                 "actions": self.actions}
 
@@ -135,10 +145,12 @@ class DQNAgent:
         if not snapshot:
             return
         self._keys = list(snapshot["keys"])
+        self._array_keys = list(snapshot.get("array_keys", []))
         self._scale = np.asarray(snapshot["scale"], np.float32)
-        self._net = _MLP(len(self._keys), len(self.actions), self._hidden, self._nprng)
+        n_in = len(self._scale)   # scalars + flattened array fields
+        self._net = _MLP(n_in, len(self.actions), self._hidden, self._nprng)
         self._net.params = {k: np.asarray(v, np.float32) for k, v in snapshot["params"].items()}
-        self._target = _MLP(len(self._keys), len(self.actions), self._hidden, self._nprng)
+        self._target = _MLP(n_in, len(self.actions), self._hidden, self._nprng)
         self._target.copy_from(self._net)
 
     def act(self, obs: Observation, epsilon: float) -> str:

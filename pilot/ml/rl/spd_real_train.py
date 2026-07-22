@@ -18,7 +18,7 @@ from .agent import QLearningAgent
 from .reward import RewardSpec
 from .spd import spd_reward_spec, spd_training_reward
 from .spd_real import SPDRealEnv
-from .spd_sim import spd_featurizer
+from .spd_sim import spd_featurizer, spd_map_featurizer
 from .train import RLResult, train
 
 EventCb = Callable[[dict[str, Any]], None]
@@ -83,7 +83,8 @@ def make_agent(kind: str, actions: list[str], seed: int = 0):
     the FULL observation (featurizer identity). Returns (agent, featurizer)."""
     if kind == "dqn":
         from .dqn import DQNAgent
-        return DQNAgent(actions, seed=seed), (lambda o: o)
+        # bigger hidden layer: the input now includes the ~810-cell egocentric map
+        return DQNAgent(actions, seed=seed, hidden=128), spd_map_featurizer
     return QLearningAgent(actions, seed=seed), spd_featurizer
 
 

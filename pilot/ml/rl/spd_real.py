@@ -121,7 +121,13 @@ class SPDRealEnv(GameEnv):
 
     @staticmethod
     def _to_obs(reply: dict) -> Observation:
-        obs = {k: float(v) for k, v in reply.items() if k not in _INFO_FIELDS}
+        # scalars are floats; list fields (the egocentric map window) pass through
+        # untouched for the featurizer to unpack
+        obs = {}
+        for k, v in reply.items():
+            if k in _INFO_FIELDS:
+                continue
+            obs[k] = v if isinstance(v, list) else float(v)
         if obs.get("stairs_dist", 0.0) < 0:
             obs["stairs_dist"] = UNKNOWN_STAIRS_DIST
         return obs

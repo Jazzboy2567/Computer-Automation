@@ -15,6 +15,8 @@ from __future__ import annotations
 import random
 from typing import Any
 
+import numpy as np
+
 from .env import GameEnv, Observation
 
 # (dx, dy) per move, with y increasing downward.
@@ -222,4 +224,23 @@ def spd_featurizer(obs: Observation) -> Observation:
     feat = {k: obs.get(k, 0.0) for k in _AGENT_KEYS}
     for k, cap in _CAPS.items():
         feat[k] = min(cap, feat[k])
+    return feat
+
+
+# The egocentric map window (rlbridge Observations.MAP_*): one bitmask per tile,
+# 10 channels. The DQN needs it unpacked into 0/1 planes — a categorical bitmask
+# fed raw would imply false ordinality between terrain types.
+_MAP_CHANNELS = 10
+
+
+def spd_map_featurizer(obs: Observation) -> Observation:
+    """Identity over scalars, but unpack `map_bits` into a flat 0/1 plane vector
+    under key `map` (kept as a numpy array so the DQN concatenates it directly).
+    Used only by the neural agent — the tabular one can't take ~800 features."""
+    feat = {k: v for k, v in obs.items() if k != "map_bits"}
+    bits = obs.get("map_bits")
+    if bits is not None:
+        b = np.asarray(bits, dtype=np.int32)
+        planes = ((b[:, None] >> np.arange(_MAP_CHANNELS)) & 1).astype(np.float32)
+        feat["map"] = planes.ravel()
     return feat
