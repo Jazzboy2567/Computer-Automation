@@ -71,6 +71,9 @@ def test_capability_actions_and_features():
     # agent learns spend-now vs save-up rather than the engine forcing an order
     for action in ("equip_gear", "equip_misc", "drink_strength", "read_upgrade"):
         assert action in SPD_ACTIONS and action in SPDRealEnv.action_space
+    # talent allocation: the agent picks which perk slot to invest (its build)
+    for action in ("talent_0", "talent_1", "talent_2", "talent_3"):
+        assert action in SPD_ACTIONS and action in SPDRealEnv.action_space
     # capability state is featurized (learnable), defaulting to 0 for the sim
     feat = spd_featurizer({"hp_bin": 4, "enemies_visible": 1, "enemy_dir": 3,
                            "enemy_adjacent": 0, "stairs_dir": 0, "has_heal": 0,

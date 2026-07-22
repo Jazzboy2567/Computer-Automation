@@ -55,6 +55,9 @@ SPD_ACTIONS: list[str] = [
     "shoot_bow",                               # fire the Spirit Bow (huntress) at the nearest visible enemy
     "quaff_unknown",                           # drink an unidentified potion (the ID gamble)
     "read_unknown",                            # read an unidentified scroll (the ID gamble)
+    # spend a talent point on the Nth perk of the current tier — the agent picks
+    # the build (which perk, when); restores perks / rogue search / huntress vision
+    "talent_0", "talent_1", "talent_2", "talent_3",
     "wait",                                    # pass a turn (passive regen)
 ]
 
