@@ -198,19 +198,34 @@ def test_descending_outpays_farming_a_floor_and_compounds():
     assert deep > descend * 2, "reaching floor 9 must be worth far more than floor 2"
 
 
-def test_resting_to_heal_is_free_but_stalling_costs():
-    """Sitting still is real play when it buys something (HP regen), so it must
-    stay free — but idling with nothing to gain has to cost, or lingering safely
-    on floor 1 beats any risky descent (the agent sat out 415 of 600 turns)."""
+def test_getting_stuck_costs_progressively_more():
+    """Progress (a fight, a heal, new ground, loot, a floor change) keeps the
+    stall streak at 0 and is free. Once a floor is picked clean and quiet the
+    streak climbs, and the cost must RAMP — no magic cutoff — so lingering can
+    never beat descending (the agent sat out 415 of 600 turns at depth 1.17)."""
     from pilot.ml.rl.spd import spd_reward_spec
 
     reward = spd_reward_spec()
-    hurt = {"hp_current": 8.0, "hp_max": 20.0, "depth": 1.0}
-    # engine marks a resting-while-hurt turn as productive (idle_unproductive=0)
-    resting = reward.compute(hurt, {**hurt, "idle_unproductive": 0}, False, {})
-    stalling = reward.compute(hurt, {**hurt, "idle_unproductive": 1}, False, {})
-    assert resting == 0.0, "resting off damage must be free"
-    assert stalling < resting, "stalling with nothing to gain must cost"
+    base = {"hp_current": 20.0, "depth": 1.0, "stall_streak": 0.0}
+
+    # progress keeps it free
+    assert reward.compute(base, dict(base), False, {}) == 0.0
+
+    # each further stalled turn costs strictly more than the last
+    step5 = reward.compute({**base, "stall_streak": 4.0},
+                           {**base, "stall_streak": 5.0}, False, {})
+    step50 = reward.compute({**base, "stall_streak": 49.0},
+                            {**base, "stall_streak": 50.0}, False, {})
+    assert step5 < 0 and step50 < step5, "the stall cost must ramp, not stay flat"
+
+    # and a long stall must end up worse than the reward for descending a floor
+    total = sum(
+        reward.compute({**base, "stall_streak": float(n)},
+                       {**base, "stall_streak": float(n + 1)}, False, {})
+        for n in range(60)
+    )
+    descend = reward.compute(base, {**base, "depth": 2.0}, False, {})
+    assert total < -descend, "stalling a floor out must cost more than a descent pays"
 
 
 def test_trying_a_descent_beats_idling_the_clock_out():
@@ -222,8 +237,10 @@ def test_trying_a_descent_beats_idling_the_clock_out():
     reward = spd_reward_spec()
     steps, start = 600, {"hp_current": 20.0, "depth": 1.0, "inventory_count": 4.0}
 
-    # (a) stall out the whole episode on floor 1 (full HP, so nothing to regain)
-    idle = steps * reward.compute(start, {**start, "idle_unproductive": 1}, False, {})
+    # (a) stall out the whole episode on floor 1 (nothing found, nothing fought)
+    idle = sum(reward.compute({**start, "stall_streak": float(n)},
+                              {**start, "stall_streak": float(n + 1)}, False, {})
+               for n in range(steps))
 
     # (b) descend to floor 2, pick up a few items, then die halfway through
     tried = reward.compute(start, {**start, "depth": 2.0}, False, {})
