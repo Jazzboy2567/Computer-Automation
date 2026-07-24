@@ -32,7 +32,11 @@ class RewardRule(BaseModel):
     # genuinely worth more than earlier progress (in a dungeon crawler, reaching
     # floor 10 is worth far more than reaching floor 2 — a flat rate tells the
     # agent depth doesn't compound, and it will happily farm the first floor).
-    scale_by: Optional[str] = None
+    # One field name, or several — the weight is multiplied by each field's
+    # current value, so a reward can depend on more than one thing at once
+    # (e.g. descending pays by how DEEP you now are AND how thoroughly you
+    # worked the floor you left, making a dive past the loot worth ~nothing).
+    scale_by: Optional[str | list[str]] = None
 
     def value(self, prev: Observation, cur: Observation) -> float:
         if self.max_depth is not None and cur.get("depth", 0.0) > self.max_depth:
@@ -40,7 +44,9 @@ class RewardRule(BaseModel):
         d = cur.get(self.field, 0.0) - prev.get(self.field, 0.0)
         weight = self.weight
         if self.scale_by is not None:
-            weight *= cur.get(self.scale_by, 1.0)
+            fields = [self.scale_by] if isinstance(self.scale_by, str) else self.scale_by
+            for f in fields:
+                weight *= cur.get(f, 1.0)
         if self.direction == "up" and d > 0:
             return weight * (d if self.per_unit else 1.0)
         if self.direction == "down" and d < 0:

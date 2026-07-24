@@ -76,12 +76,17 @@ def spd_reward_spec() -> RewardSpec:
             RewardRule(field="level", direction="up", weight=5.0),                          # level up (kills) = good
             RewardRule(field="xp_frac", direction="up", weight=2.0, per_unit=True),         # progress to a kill/level
             RewardRule(field="enemies_visible", direction="down", weight=1.0),              # threat removed = good
-            # Descending COMPOUNDS: reaching floor d pays 5*d, so floor 5 (+25) is
-            # worth far more than floor 2 (+10). A flat rate told the agent that
-            # depth doesn't compound — and since fully exploring a floor paid more
-            # than the stairs, the optimal policy was to farm floor 1 and never
-            # descend. Depth compounding IS the game (the Amulet is on floor 26).
-            RewardRule(field="depth", direction="up", weight=5.0, scale_by="depth"),
+            # Descending COMPOUNDS (reaching floor d is worth ~5*d, so floor 5 far
+            # outweighs floor 2 — a flat rate told the agent depth doesn't compound,
+            # and it farmed floor 1 forever), but it only pays for a floor you
+            # actually WORKED: the value is also scaled by how much of the floor you
+            # left had been explored. Diving straight past a floor's loot is worth
+            # almost nothing; taking the stairs after clearing it pays in full.
+            # Together with the stall clock — which pushes you off a picked-clean
+            # floor — this makes the intended loop optimal: loot the floor, then go
+            # deeper, with each floor worth more than the last.
+            RewardRule(field="depth", direction="up", weight=5.0,
+                       scale_by=["depth", "descent_explored"]),
             RewardRule(field="gold", direction="up", weight=0.01, per_unit=True),           # gold = good
             # LOOT is the objective, and it pays PER ITEM. Exploring a floor is not
             # rewarded in itself — it's simply how you find items, so it happens
