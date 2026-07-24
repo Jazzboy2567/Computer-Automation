@@ -191,11 +191,28 @@ def test_descending_outpays_farming_a_floor_and_compounds():
     looted = reward.compute(base, {**base, "inventory_count": 6.0}, False, {})
     assert looted > nothing
 
-    # and depth compounds: deeper descents are worth strictly more
-    descend = reward.compute(base, {**base, "depth": 2.0}, False, {})
+    # and depth compounds: deeper descents are worth strictly more (comparing
+    # like for like — both after working the floor over)
+    worked = {"descent_explored": 1.0}
+    descend = reward.compute(base, {**base, "depth": 2.0, **worked}, False, {})
     deep_prev = {**base, "depth": 8.0}
-    deep = reward.compute(deep_prev, {**deep_prev, "depth": 9.0}, False, {})
+    deep = reward.compute(deep_prev, {**deep_prev, "depth": 9.0, **worked}, False, {})
     assert deep > descend * 2, "reaching floor 9 must be worth far more than floor 2"
+
+
+def test_diving_past_a_floors_loot_pays_almost_nothing():
+    """Depth only pays for a floor you actually worked. Otherwise the fastest way
+    to bank the compounding descent reward is to stair-dive straight past every
+    floor's loot — the opposite of the early-game play we want."""
+    from pilot.ml.rl.spd import spd_reward_spec
+
+    reward = spd_reward_spec()
+    base = {"hp_current": 20.0, "depth": 1.0, "inventory_count": 4.0}
+
+    dive = reward.compute(base, {**base, "depth": 2.0, "descent_explored": 0.05}, False, {})
+    cleared = reward.compute(base, {**base, "depth": 2.0, "descent_explored": 1.0}, False, {})
+    assert cleared > 10 * dive, "diving past the loot must be worth far less"
+    assert dive < 1.0, "an untouched floor's descent is worth ~nothing"
 
 
 def test_getting_stuck_costs_progressively_more():
