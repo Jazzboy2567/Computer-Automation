@@ -89,6 +89,16 @@ def spd_reward_spec() -> RewardSpec:
             # floor holds finitely many items, so once it's picked clean the only
             # way to get more loot is to go deeper.
             RewardRule(field="inventory_count", direction="up", weight=2.0, per_unit=True),
+            # Getting STUCK costs progressively more. stall_streak counts turns that
+            # achieved nothing — no fighting (or recent enemy), no healing, no new
+            # ground, no loot, no floor change — and this charges 0.01 * streak each
+            # such turn, so the cost ramps instead of firing at some magic cutoff.
+            # Consequence: once a floor is picked clean and quiet, standing around
+            # (or pacing it) bleeds reward until the hero takes the stairs, while a
+            # fight, a rest that actually heals, or any real find resets it to free.
+            # This is what stops "linger safely on floor 1" from beating a descent.
+            RewardRule(field="stall_streak", direction="up", weight=-0.01,
+                       per_unit=True, scale_by="stall_streak"),
             RewardRule(field="has_amulet", direction="up", weight=200.0),                   # the Amulet of Yendor!
             RewardRule(field="won", direction="up", weight=500.0),                          # finishing the game = best
         ],
@@ -100,12 +110,6 @@ def spd_reward_spec() -> RewardSpec:
             # An impossible action degraded to a rest: stops a policy hiding by
             # spamming a no-op (one DQN run collapsed onto descend-with-no-stairs).
             "action_wasted": -0.05,
-            # Idling with nothing to gain — already at full health, or stalling
-            # past a few turns. Sitting still was FREE, so lingering safely on
-            # floor 1 beat any descent that risked dying, and the agent sat out
-            # 415 of 600 turns at depth 1.17. Resting off damage stays free, so
-            # this charges stalling without punishing recovery.
-            "idle_unproductive": -0.1,
         },
         death_field="hp_current",
         death_threshold=0.0,
