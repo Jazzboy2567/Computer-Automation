@@ -169,3 +169,76 @@ def run_spd_real_training(
           random=result.avg_return_random, improvement=result.improvement,
           depth_trained=result.avg_depth_trained, depth_random=result.avg_depth_random)
     return result, ws
+
+
+def run_continuous(
+    *,
+    interval: int = 4000,
+    base_dir: Optional[Path] = None,
+    seed: int = 0,
+    max_steps: int = 600,
+    eval_episodes: int = 30,
+    hero: str = "warrior",
+    challenges: int = 0,
+    agent_kind: str = "dqn",
+    curriculum: Any = None,
+    decay_episodes: int = 24000,
+    on_interval: Optional[Callable[[dict], None]] = None,
+):
+    """Train ONE agent indefinitely, reporting every `interval` episodes.
+
+    Unlike calling run_spd_real_training in a loop, the agent — and therefore its
+    replay buffer and optimizer state — lives for the whole run, so experience
+    genuinely ACCUMULATES (the rare deep-floor transitions build up instead of
+    being thrown away each chunk) and exploration decays ONCE, globally, from 1.0
+    to 0.05 over `decay_episodes`, rather than restarting every chunk.
+
+    Evaluation replays the SAME floor-1 dungeons each interval (eval env seed reset),
+    so the reported curve reflects real change, not eval-set noise. Runs until the
+    caller stops the process; every interval leaves a saved policy behind.
+    """
+    ws = MLWorkspace.create("Shattered Pixel Dungeon (REAL game, continuous)", base_dir=base_dir)
+    reward = spd_reward_spec()
+    train_reward = spd_training_reward()
+    agent, feat = make_agent(agent_kind, SPDRealEnv.action_space, seed)
+    kw = {"max_steps": max_steps, "hero": hero, "challenges": challenges}
+
+    def eps_at(e: int) -> float:
+        return max(0.05, 1.0 - (1.0 - 0.05) * e / max(1, decay_episodes))
+
+    train_env = SPDRealEnv(seed=seed, curriculum=curriculum, **kw)
+    eval_env = SPDRealEnv(seed=_EVAL_SEED, **kw)
+    # random baseline is constant — measure it once
+    rng = random.Random(7)
+    rr, sr, dr = _evaluate(eval_env, lambda o: rng.choice(SPDRealEnv.action_space),
+                           reward, eval_episodes)
+    eval_env.best_depth, eval_env.best_gear = 0, ""   # don't credit random's floors
+
+    done_eps, k = 0, 0
+    try:
+        while True:
+            k += 1
+            e0, e1 = eps_at(done_eps), eps_at(done_eps + interval)
+            curve = train(train_env, agent, train_reward, interval, featurizer=feat,
+                          epsilon_start=e0, epsilon_final=e1)
+            done_eps += interval
+
+            eval_env.episode = 0                      # replay the same eval dungeons
+            rt, st, dt = _evaluate(eval_env, agent.policy, reward, eval_episodes, feat=feat)
+
+            model_path = ws.model_dir / "policy.joblib"
+            joblib.dump(agent.Q, model_path)
+
+            info = {
+                "interval": k, "total_eps": done_eps, "eps": round(e1, 3),
+                "return": round(rt, 2), "return_random": round(rr, 2),
+                "depth": round(dt, 2), "survival": round(st, 1),
+                "best_depth": eval_env.best_depth, "best_gear": eval_env.best_gear,
+                "curve_start": curve[0], "curve_end": curve[-1],
+                "workspace": str(ws.path),
+            }
+            if on_interval:
+                on_interval(info)
+    finally:
+        train_env.close()
+        eval_env.close()

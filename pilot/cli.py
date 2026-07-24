@@ -160,39 +160,33 @@ def _rl(args) -> int:
             return 0
         from pathlib import Path as _Path
         from .ml.rl.spd_campaign import challenge_mask
-        from .ml.rl.spd_real_train import depth_curriculum, run_spd_real_training
+        from .ml.rl.spd_real_train import (
+            depth_curriculum, run_continuous, run_spd_real_training)
         episodes = args.episodes if args.episodes is not None else 4000
-        common = dict(
-            hero=args.hero, challenges=challenge_mask(args.challenges),
-            agent_kind=args.agent,
-            curriculum=depth_curriculum(args.curriculum) if args.curriculum else None,
-        )
+        curriculum = depth_curriculum(args.curriculum) if args.curriculum else None
         if args.forever:
-            # Train in chunks forever, each chunk resuming from the last, so you
-            # can watch how far it gets. Stop with Ctrl-C; every chunk leaves a
-            # saved policy behind. --episodes sets the chunk size.
-            resume, chunk = _Path(args.resume) if args.resume else None, 0
-            print(f"continuous training: {episodes}-episode chunks, Ctrl-C to stop")
-            while True:
-                chunk += 1
-                # Only the FIRST cold chunk explores from scratch. A chunk that
-                # resumes a trained policy must start near-greedy, or it spends
-                # its early episodes acting at random and trains the loaded
-                # network against that — which degrades the policy each chunk
-                # (observed: floor 1.80 -> 1.73 -> 1.00 as it unlearned).
-                eps0 = 1.0 if (chunk == 1 and resume is None) else 0.2
-                result, ws = run_spd_real_training(
-                    episodes=episodes, resume_from=resume, on_event=None,
-                    epsilon_start=eps0, **common)
-                resume = _Path(result.model_path)
-                print(f"[chunk {chunk:>3}] total_eps={chunk*episodes:>7}  "
-                      f"return={result.avg_return_trained:>8.2f}  "
-                      f"avg_floor={result.avg_depth_trained:>4.2f}  "
-                      f"best_floor={result.best_depth}  gear={result.best_gear!r}",
-                      flush=True)
+            # ONE agent trained indefinitely: its replay buffer and optimizer live
+            # for the whole run, so experience accumulates and exploration decays
+            # once, globally. Stop with Ctrl-C; every interval saves a policy.
+            print(f"continuous training: {episodes}-episode intervals, Ctrl-C to stop")
+
+            def _report_interval(i):
+                print(f"[{i['interval']:>3}] eps_total={i['total_eps']:>7} "
+                      f"ε={i['eps']:.2f}  return={i['return']:>8.2f} "
+                      f"(rand {i['return_random']:.0f})  floor={i['depth']:>4.2f}  "
+                      f"best={i['best_depth']} gear={i['best_gear']!r}  "
+                      f"curve {i['curve_start']:.0f}->{i['curve_end']:.0f}", flush=True)
+
+            run_continuous(interval=episodes, hero=args.hero,
+                           challenges=challenge_mask(args.challenges),
+                           agent_kind=args.agent, curriculum=curriculum,
+                           on_interval=_report_interval)
+            return 0
         result, ws = run_spd_real_training(
             episodes=episodes, on_event=on_event,
-            resume_from=_Path(args.resume) if args.resume else None, **common,
+            hero=args.hero, challenges=challenge_mask(args.challenges),
+            agent_kind=args.agent, curriculum=curriculum,
+            resume_from=_Path(args.resume) if args.resume else None,
         )
         print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
         print(f"  deepest floor: trained {result.avg_depth_trained} vs random {result.avg_depth_random}")
