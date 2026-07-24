@@ -51,18 +51,25 @@ class RLResult(BaseModel):
 def train(
     env: GameEnv, agent: QLearningAgent, reward: RewardSpec, episodes: int,
     featurizer: Featurizer = _identity,
+    epsilon_start: float = 1.0, epsilon_final: float = 0.05,
 ) -> list[float]:
     """Interact for `episodes`, learning from the user-defined reward.
 
     The agent learns over ``featurizer(obs)`` (a compact decision-state) while the
     reward is computed from the full observation. Returns a learning curve (mean
     episode return per ~5% block).
+
+    Exploration decays from ``epsilon_start`` to ``epsilon_final``. A run that
+    CONTINUES from an already-trained policy must lower ``epsilon_start`` — with
+    the default 1.0 it would spend the first episodes acting at random and train
+    the loaded network against that, degrading the very policy it resumed.
     """
     curve: list[float] = []
     window: list[float] = []
     block = max(1, episodes // 20)
+    span = max(epsilon_start - epsilon_final, 0.0)
     for ep in range(episodes):
-        epsilon = max(0.05, 1.0 - ep / max(1, episodes))  # explore -> exploit
+        epsilon = max(epsilon_final, epsilon_start - span * ep / max(1, episodes))
         obs = env.reset()
         done = False
         total = 0.0
