@@ -76,7 +76,12 @@ def spd_reward_spec() -> RewardSpec:
             RewardRule(field="level", direction="up", weight=5.0),                          # level up (kills) = good
             RewardRule(field="xp_frac", direction="up", weight=2.0, per_unit=True),         # progress to a kill/level
             RewardRule(field="enemies_visible", direction="down", weight=1.0),              # threat removed = good
-            RewardRule(field="depth", direction="up", weight=10.0),                         # descending = strong progress
+            # Descending COMPOUNDS: reaching floor d pays 5*d, so floor 5 (+25) is
+            # worth far more than floor 2 (+10). A flat rate told the agent that
+            # depth doesn't compound — and since fully exploring a floor paid more
+            # than the stairs, the optimal policy was to farm floor 1 and never
+            # descend. Depth compounding IS the game (the Amulet is on floor 26).
+            RewardRule(field="depth", direction="up", weight=5.0, scale_by="depth"),
             RewardRule(field="gold", direction="up", weight=0.01, per_unit=True),           # gold = good
             RewardRule(field="inventory_count", direction="up", weight=1.0),                # more items = good
             RewardRule(field="has_amulet", direction="up", weight=200.0),                   # the Amulet of Yendor!
@@ -112,10 +117,14 @@ def spd_training_reward() -> RewardSpec:
     shaping = [
         RewardRule(field="stairs_dist", direction="down", weight=0.3, per_unit=True),
         RewardRule(field="stairs_dist", direction="up", weight=-0.3, per_unit=True),
-        # Seeing new floor is progress ("check the floor for loot" / find the
-        # stairs). Un-farmable: cells_explored only ever grows. The sim doesn't
-        # emit the field, so this rule is inert there (missing field = 0 delta).
-        RewardRule(field="cells_explored", direction="up", weight=0.05, per_unit=True),
+        # Seeing new floor is progress (find the loot / find the stairs), but it
+        # must NOT outpay the stairs. Rewarding raw cells_explored at 0.05/cell was
+        # unbounded: a 300-400 cell floor paid +15-20 risk-free, beating the flat
+        # +10 descent, so the learned policy was to walk every tile of floor 1 and
+        # never take the stairs (survival ~490 of 600 steps: running out the clock).
+        # explored_frac is bounded 0..1, so a FULLY explored floor pays at most +8
+        # — less than even the shallowest descent — and it resets each floor.
+        RewardRule(field="explored_frac", direction="up", weight=8.0, per_unit=True),
         # Information gain: identifying an item TYPE (drink an unknown potion,
         # read an unknown scroll, zap an unknown wand, wear a ring) pays out, so
         # the agent learns the ID gamble is worth the risk instead of hoarding

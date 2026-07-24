@@ -27,15 +27,24 @@ class RewardRule(BaseModel):
     # so it doesn't push behaviour the player wouldn't want deep (swapping a
     # settled build). Inert where the observation has no `depth`.
     max_depth: Optional[float] = None
+    # Multiply the weight by the CURRENT value of this field, so a reward can
+    # compound instead of paying a flat rate. Needed where later progress is
+    # genuinely worth more than earlier progress (in a dungeon crawler, reaching
+    # floor 10 is worth far more than reaching floor 2 — a flat rate tells the
+    # agent depth doesn't compound, and it will happily farm the first floor).
+    scale_by: Optional[str] = None
 
     def value(self, prev: Observation, cur: Observation) -> float:
         if self.max_depth is not None and cur.get("depth", 0.0) > self.max_depth:
             return 0.0
         d = cur.get(self.field, 0.0) - prev.get(self.field, 0.0)
+        weight = self.weight
+        if self.scale_by is not None:
+            weight *= cur.get(self.scale_by, 1.0)
         if self.direction == "up" and d > 0:
-            return self.weight * (d if self.per_unit else 1.0)
+            return weight * (d if self.per_unit else 1.0)
         if self.direction == "down" and d < 0:
-            return self.weight * (abs(d) if self.per_unit else 1.0)
+            return weight * (abs(d) if self.per_unit else 1.0)
         return 0.0
 
 

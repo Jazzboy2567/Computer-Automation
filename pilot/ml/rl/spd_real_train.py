@@ -78,6 +78,23 @@ def _report(result: RLResult, reward: RewardSpec) -> str:
     ]) + "\n"
 
 
+def depth_curriculum(max_depth: int = 4, prob: float = 0.35, seed: int = 0):
+    """A fraction of training episodes start on a deeper floor (2..max_depth).
+
+    Breaks the loop where an agent that always dies on floor 2 never experiences
+    the floors where gear, talents and boss tactics matter — so it can never
+    learn that they matter. Only the episode's STARTING FLOOR changes; how to
+    play from there is entirely the agent's to learn. Most episodes still start
+    on floor 1 so the real task stays dominant, and evaluation never uses this.
+    """
+    rng = random.Random(seed)
+
+    def pick(episode: int) -> int:
+        return rng.randint(2, max_depth) if rng.random() < prob else 1
+
+    return pick
+
+
 def make_agent(kind: str, actions: list[str], seed: int = 0):
     """'table' = tabular Q over the compact featurizer; 'dqn' = neural net over
     the FULL observation (featurizer identity). Returns (agent, featurizer)."""
@@ -97,6 +114,8 @@ def run_spd_real_training(
     hero: str = "warrior",
     challenges: int = 0,          # SPD challenge bitmask
     agent_kind: str = "table",
+    curriculum: Any = None,       # callable(episode) -> starting floor, training only
+    resume_from: Optional[Path] = None,   # a policy.joblib to continue learning from
     on_event: Optional[EventCb] = None,
 ) -> tuple[RLResult, MLWorkspace]:
     ws = MLWorkspace.create("Shattered Pixel Dungeon (REAL game)", base_dir=base_dir)
@@ -105,11 +124,18 @@ def run_spd_real_training(
     reward = spd_reward_spec()             # the user's true objective (for eval)
     train_reward = spd_training_reward()   # + shaping toward the stairs (for learning)
     agent, feat = make_agent(agent_kind, SPDRealEnv.action_space, seed)
+    if resume_from is not None and Path(resume_from).exists():
+        # continue learning from an earlier chunk instead of starting over, so
+        # training can run indefinitely across many runs
+        agent.Q = joblib.load(resume_from)
+        _emit(on_event, event="resume", path=str(resume_from))
     _emit(on_event, event="train", episodes=episodes, actions=SPDRealEnv.action_space)
 
     kw = {"max_steps": max_steps, "hero": hero, "challenges": challenges}
     best_depth, best_gear = 0, ""
-    with SPDRealEnv(seed=seed, **kw) as env:
+    # Curriculum applies to TRAINING only; every evaluation below starts on floor
+    # 1 so the reported numbers always measure the real task.
+    with SPDRealEnv(seed=seed, curriculum=curriculum, **kw) as env:
         curve = train(env, agent, train_reward, episodes, featurizer=feat)
         best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
 

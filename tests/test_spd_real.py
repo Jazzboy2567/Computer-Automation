@@ -55,11 +55,27 @@ def test_reset_maps_observation_and_seeds():
     proc = FakeProc([_obs_line(), _obs_line()])
     env = SPDRealEnv(seed=100, proc=proc)
     obs = env.reset()
-    assert proc.commands == ["reset 100 warrior 0"]
+    assert proc.commands == ["reset 100 warrior 0 1"]    # trailing arg = start floor
     assert obs["hp_current"] == 20 and obs["hp_bin"] == 4
     assert "done" not in obs and "turns" not in obs and "pos" not in obs
     env.reset()
-    assert proc.commands[-1] == "reset 101 warrior 0"    # fresh dungeon per episode
+    assert proc.commands[-1] == "reset 101 warrior 0 1"  # fresh dungeon per episode
+
+
+def test_curriculum_starts_deeper_but_does_not_inflate_best_depth():
+    # a curriculum episode BEGINS deep, so it must not count as "reached floor 4"
+    proc = FakeProc([_obs_line(depth=4), _obs_line(depth=4)])
+    env = SPDRealEnv(seed=1, proc=proc, curriculum=lambda ep: 4)
+    env.reset()
+    assert proc.commands[-1] == "reset 1 warrior 0 4"
+    env.step("wait")
+    assert env.best_depth == 0                            # not an achievement
+
+    proc2 = FakeProc([_obs_line(depth=1), _obs_line(depth=3)])
+    env2 = SPDRealEnv(seed=1, proc=proc2)                 # no curriculum -> real run
+    env2.reset()
+    env2.step("descend")
+    assert env2.best_depth == 3                           # genuinely reached
 
 
 def test_unknown_stairs_maps_to_assumed_far():
@@ -106,8 +122,9 @@ def test_explore_in_action_space_and_shaping_rewards_new_cells():
 
     assert "explore" in SPDRealEnv.action_space
     reward = spd_training_reward()
-    prev = {"cells_explored": 60.0, "hp_current": 20.0}
-    cur = {"cells_explored": 80.0, "hp_current": 20.0}
+    # bounded explored_frac (0..1) replaced the unbounded per-cell count
+    prev = {"explored_frac": 0.2, "hp_current": 20.0}
+    cur = {"explored_frac": 0.4, "hp_current": 20.0}
     gained = reward.compute(prev, cur, False, {})
     flat = reward.compute(prev, dict(prev), False, {})
     assert gained > flat                          # seeing new floor pays
@@ -151,6 +168,30 @@ def test_gear_improvement_rewarded_only_early():
     late_flat = reward.compute({"gear_score": 1.0, "hp_current": 20.0, "depth": 12.0},
                                {"gear_score": 1.0, "hp_current": 20.0, "depth": 12.0}, False, {})
     assert late == late_flat
+
+
+def test_descending_outpays_farming_a_floor_and_compounds():
+    """The failure that produced 21 runs stuck on floor ~1.9 in starting gear:
+    fully exploring a floor paid more than the stairs, so farming floor 1 was
+    optimal. Descending must beat it, and must compound with depth."""
+    from pilot.ml.rl.spd import spd_training_reward
+
+    reward = spd_training_reward()
+    base = {"hp_current": 20.0, "depth": 1.0, "explored_frac": 0.0}
+
+    # fully exploring a whole floor, gaining nothing else
+    farm = reward.compute(base, {**base, "explored_frac": 1.0}, False, {})
+    # taking the stairs from floor 1 to 2
+    descend = reward.compute(base, {**base, "depth": 2.0}, False, {})
+    assert descend > farm, "farming a floor must never outpay the stairs"
+
+    # and depth compounds: deeper descents are worth strictly more
+    deep_prev = {"hp_current": 20.0, "depth": 8.0, "explored_frac": 0.0}
+    deep = reward.compute(deep_prev, {**deep_prev, "depth": 9.0}, False, {})
+    assert deep > descend * 2, "reaching floor 9 must be worth far more than floor 2"
+
+    # exploration stays bounded no matter how large the floor is
+    assert farm == reward.compute(base, {**base, "explored_frac": 1.0}, False, {})
 
 
 def test_wasted_action_is_penalized():
