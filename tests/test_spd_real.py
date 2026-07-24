@@ -117,19 +117,20 @@ def test_featurizer_accepts_real_observation():
                          "misc_available", "frontier_left", "loot_visible"}
 
 
-def test_explore_in_action_space_and_shaping_rewards_new_cells():
+def test_explore_is_a_capability_not_a_paid_objective():
+    """`explore` stays in the action space (it's how the agent covers ground),
+    but covering ground is not itself rewarded — only what it FINDS is."""
     from pilot.ml.rl.spd import spd_training_reward
 
     assert "explore" in SPDRealEnv.action_space
     reward = spd_training_reward()
-    # bounded explored_frac (0..1) replaced the unbounded per-cell count
-    prev = {"explored_frac": 0.2, "hp_current": 20.0}
-    cur = {"explored_frac": 0.4, "hp_current": 20.0}
-    gained = reward.compute(prev, cur, False, {})
+    prev = {"explored_frac": 0.2, "hp_current": 20.0, "inventory_count": 4.0}
     flat = reward.compute(prev, dict(prev), False, {})
-    assert gained > flat                          # seeing new floor pays
-    # the sim never emits the field -> the rule must be inert there
-    assert reward.compute({"hp_current": 20.0}, {"hp_current": 20.0}, False, {}) == flat
+    explored = reward.compute(prev, {**prev, "explored_frac": 0.9}, False, {})
+    assert explored == flat                       # ground covered, nothing found
+    found = reward.compute(prev, {**prev, "explored_frac": 0.9,
+                                  "inventory_count": 5.0}, False, {})
+    assert found > flat                           # exploring PAYS via what it finds
 
 
 def test_identifying_an_item_type_is_rewarded():
@@ -177,21 +178,24 @@ def test_descending_outpays_farming_a_floor_and_compounds():
     from pilot.ml.rl.spd import spd_training_reward
 
     reward = spd_training_reward()
-    base = {"hp_current": 20.0, "depth": 1.0, "explored_frac": 0.0}
+    base = {"hp_current": 20.0, "depth": 1.0, "explored_frac": 0.0,
+            "inventory_count": 4.0}
+    nothing = reward.compute(base, dict(base), False, {})
 
-    # fully exploring a whole floor, gaining nothing else
-    farm = reward.compute(base, {**base, "explored_frac": 1.0}, False, {})
-    # taking the stairs from floor 1 to 2
-    descend = reward.compute(base, {**base, "depth": 2.0}, False, {})
-    assert descend > farm, "farming a floor must never outpay the stairs"
+    # covering ground is NOT the objective: walking a whole floor and finding
+    # nothing pays exactly the same as standing still
+    walked = reward.compute(base, {**base, "explored_frac": 1.0}, False, {})
+    assert walked == nothing, "exploring must not be paid for in itself"
+
+    # picking items up IS the objective
+    looted = reward.compute(base, {**base, "inventory_count": 6.0}, False, {})
+    assert looted > nothing
 
     # and depth compounds: deeper descents are worth strictly more
-    deep_prev = {"hp_current": 20.0, "depth": 8.0, "explored_frac": 0.0}
+    descend = reward.compute(base, {**base, "depth": 2.0}, False, {})
+    deep_prev = {**base, "depth": 8.0}
     deep = reward.compute(deep_prev, {**deep_prev, "depth": 9.0}, False, {})
     assert deep > descend * 2, "reaching floor 9 must be worth far more than floor 2"
-
-    # exploration stays bounded no matter how large the floor is
-    assert farm == reward.compute(base, {**base, "explored_frac": 1.0}, False, {})
 
 
 def test_wasted_action_is_penalized():

@@ -83,7 +83,12 @@ def spd_reward_spec() -> RewardSpec:
             # descend. Depth compounding IS the game (the Amulet is on floor 26).
             RewardRule(field="depth", direction="up", weight=5.0, scale_by="depth"),
             RewardRule(field="gold", direction="up", weight=0.01, per_unit=True),           # gold = good
-            RewardRule(field="inventory_count", direction="up", weight=1.0),                # more items = good
+            # LOOT is the objective, and it pays PER ITEM. Exploring a floor is not
+            # rewarded in itself — it's simply how you find items, so it happens
+            # because it pays off, not because walking is scored. Self-limiting: a
+            # floor holds finitely many items, so once it's picked clean the only
+            # way to get more loot is to go deeper.
+            RewardRule(field="inventory_count", direction="up", weight=2.0, per_unit=True),
             RewardRule(field="has_amulet", direction="up", weight=200.0),                   # the Amulet of Yendor!
             RewardRule(field="won", direction="up", weight=500.0),                          # finishing the game = best
         ],
@@ -117,14 +122,12 @@ def spd_training_reward() -> RewardSpec:
     shaping = [
         RewardRule(field="stairs_dist", direction="down", weight=0.3, per_unit=True),
         RewardRule(field="stairs_dist", direction="up", weight=-0.3, per_unit=True),
-        # Seeing new floor is progress (find the loot / find the stairs), but it
-        # must NOT outpay the stairs. Rewarding raw cells_explored at 0.05/cell was
-        # unbounded: a 300-400 cell floor paid +15-20 risk-free, beating the flat
-        # +10 descent, so the learned policy was to walk every tile of floor 1 and
-        # never take the stairs (survival ~490 of 600 steps: running out the clock).
-        # explored_frac is bounded 0..1, so a FULLY explored floor pays at most +8
-        # — less than even the shallowest descent — and it resets each floor.
-        RewardRule(field="explored_frac", direction="up", weight=8.0, per_unit=True),
+        # NOTE: covering ground is deliberately NOT rewarded. Paying per explored
+        # cell made "walk every tile of floor 1" the optimal policy (+15-20 risk-free
+        # vs a flat +10 descent) and the agent farmed the first floor for 150k
+        # episodes. Exploring is the MEANS, not the end: the agent explores because
+        # that is how it finds items and the stairs, both of which pay. Rewarding
+        # the walking rewards a proxy for the goal instead of the goal.
         # Information gain: identifying an item TYPE (drink an unknown potion,
         # read an unknown scroll, zap an unknown wand, wear a ring) pays out, so
         # the agent learns the ID gamble is worth the risk instead of hoarding
