@@ -51,3 +51,32 @@ def test_unseen_keys_default_to_zero():
     agent = DQNAgent(["a", "b"], seed=0)
     agent.policy({"x": 1.0, "y": 2.0})            # locks the schema
     assert agent.policy({"x": 1.0}) in ("a", "b")  # missing key -> 0, no crash
+
+
+def test_resumed_training_does_not_restart_exploration():
+    """A chunk that continues a trained policy must not begin by acting at
+    random: `--forever` loaded good weights, then trained them against 4000
+    near-random episodes, and the policy degraded every chunk (floor 1.80 ->
+    1.73 -> 1.00). Exploration must start where the caller says it does."""
+    from pilot.ml.rl.train import train
+    from pilot.ml.rl.reward import RewardSpec, RewardRule
+    from pilot.ml.rl.spd_sim import SPDGridEnv
+    from pilot.ml.rl.agent import QLearningAgent
+
+    seen: list[float] = []
+
+    class SpyAgent(QLearningAgent):
+        def act(self, obs, epsilon=0.0):
+            seen.append(epsilon)
+            return super().act(obs, epsilon)
+
+    reward = RewardSpec(rules=[RewardRule(field="depth", direction="up", weight=1.0)])
+    env = SPDGridEnv(seed=0, max_steps=5)
+    train(env, SpyAgent(env.action_space, seed=0), reward, episodes=4,
+          epsilon_start=0.2)
+
+    assert max(seen) <= 0.2, "a resumed chunk must not explore from scratch"
+
+    seen.clear()
+    train(env, SpyAgent(env.action_space, seed=0), reward, episodes=4)
+    assert max(seen) > 0.9, "a cold run should still explore fully at the start"

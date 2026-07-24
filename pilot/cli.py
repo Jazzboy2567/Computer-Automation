@@ -175,8 +175,15 @@ def _rl(args) -> int:
             print(f"continuous training: {episodes}-episode chunks, Ctrl-C to stop")
             while True:
                 chunk += 1
+                # Only the FIRST cold chunk explores from scratch. A chunk that
+                # resumes a trained policy must start near-greedy, or it spends
+                # its early episodes acting at random and trains the loaded
+                # network against that — which degrades the policy each chunk
+                # (observed: floor 1.80 -> 1.73 -> 1.00 as it unlearned).
+                eps0 = 1.0 if (chunk == 1 and resume is None) else 0.2
                 result, ws = run_spd_real_training(
-                    episodes=episodes, resume_from=resume, on_event=None, **common)
+                    episodes=episodes, resume_from=resume, on_event=None,
+                    epsilon_start=eps0, **common)
                 resume = _Path(result.model_path)
                 print(f"[chunk {chunk:>3}] total_eps={chunk*episodes:>7}  "
                       f"return={result.avg_return_trained:>8.2f}  "

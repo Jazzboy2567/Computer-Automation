@@ -116,6 +116,7 @@ def run_spd_real_training(
     agent_kind: str = "table",
     curriculum: Any = None,       # callable(episode) -> starting floor, training only
     resume_from: Optional[Path] = None,   # a policy.joblib to continue learning from
+    epsilon_start: float = 1.0,           # lower this when resuming (see train())
     on_event: Optional[EventCb] = None,
 ) -> tuple[RLResult, MLWorkspace]:
     ws = MLWorkspace.create("Shattered Pixel Dungeon (REAL game)", base_dir=base_dir)
@@ -136,7 +137,8 @@ def run_spd_real_training(
     # Curriculum applies to TRAINING only; every evaluation below starts on floor
     # 1 so the reported numbers always measure the real task.
     with SPDRealEnv(seed=seed, curriculum=curriculum, **kw) as env:
-        curve = train(env, agent, train_reward, episodes, featurizer=feat)
+        curve = train(env, agent, train_reward, episodes, featurizer=feat,
+                      epsilon_start=epsilon_start)
         best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
 
     with SPDRealEnv(seed=_EVAL_SEED, **kw) as env:
