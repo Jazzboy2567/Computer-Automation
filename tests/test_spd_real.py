@@ -241,8 +241,16 @@ def test_getting_stuck_costs_progressively_more():
                        {**base, "stall_streak": float(n + 1)}, False, {})
         for n in range(60)
     )
-    descend = reward.compute(base, {**base, "depth": 2.0}, False, {})
+    descend = reward.compute(base, {**base, "depth": 2.0,
+                                    "descent_explored": 1.0}, False, {})
     assert total < -descend, "stalling a floor out must cost more than a descent pays"
+
+    # but the ramp must SATURATE, not grow without bound: an unbounded ramp let a
+    # stuck policy bleed ~-125 a run, drowning every other signal and blowing up
+    # the value targets the network fits
+    step200 = reward.compute({**base, "stall_streak": 199.0},
+                             {**base, "stall_streak": 200.0}, False, {})
+    assert step200 == step50, "the stall cost must plateau once it is clearly bad"
 
 
 def test_trying_a_descent_beats_idling_the_clock_out():
