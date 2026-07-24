@@ -102,8 +102,14 @@ def spd_reward_spec() -> RewardSpec:
             # (or pacing it) bleeds reward until the hero takes the stairs, while a
             # fight, a rest that actually heals, or any real find resets it to free.
             # This is what stops "linger safely on floor 1" from beating a descent.
+            # The ramp SATURATES (scale_cap): it climbs for ~25 stalled turns and
+            # then holds. Uncapped it grew quadratically — a stuck greedy policy
+            # bled about -125 a run (and would reach -578 over a full episode),
+            # which both drowned the loot/depth signal and blew up the TD targets
+            # the network fits. Capped, ~50 stalled turns still costs more than a
+            # descent pays, which is the calibration that matters.
             RewardRule(field="stall_streak", direction="up", weight=-0.01,
-                       per_unit=True, scale_by="stall_streak"),
+                       per_unit=True, scale_by="stall_streak", scale_cap=25.0),
             RewardRule(field="has_amulet", direction="up", weight=200.0),                   # the Amulet of Yendor!
             RewardRule(field="won", direction="up", weight=500.0),                          # finishing the game = best
         ],

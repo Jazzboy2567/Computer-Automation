@@ -37,6 +37,10 @@ class RewardRule(BaseModel):
     # (e.g. descending pays by how DEEP you now are AND how thoroughly you
     # worked the floor you left, making a dive past the loot worth ~nothing).
     scale_by: Optional[str | list[str]] = None
+    # Upper bound on the scale multiplier. A ramp that grows without limit can
+    # dominate every other term and, worse, blow up the TD targets a value
+    # network is trying to fit — so a ramp should climb and then SATURATE.
+    scale_cap: Optional[float] = None
 
     def value(self, prev: Observation, cur: Observation) -> float:
         if self.max_depth is not None and cur.get("depth", 0.0) > self.max_depth:
@@ -45,8 +49,12 @@ class RewardRule(BaseModel):
         weight = self.weight
         if self.scale_by is not None:
             fields = [self.scale_by] if isinstance(self.scale_by, str) else self.scale_by
+            scale = 1.0
             for f in fields:
-                weight *= cur.get(f, 1.0)
+                scale *= cur.get(f, 1.0)
+            if self.scale_cap is not None:
+                scale = min(scale, self.scale_cap)
+            weight *= scale
         if self.direction == "up" and d > 0:
             return weight * (d if self.per_unit else 1.0)
         if self.direction == "down" and d < 0:
