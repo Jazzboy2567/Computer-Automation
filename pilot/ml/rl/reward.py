@@ -56,18 +56,19 @@ class RewardSpec(BaseModel):
     death_field: str = "player_health"
     death_threshold: float = 0.0
     death_reward: float = 0.0         # applied once when done & field <= threshold
-    # A per-step cost when the chosen action accomplished nothing (`waste_field`
-    # is truthy in the resulting observation). Keeps an impossible action from
-    # being a "free" no-op a value-overestimating policy can collapse onto.
-    waste_field: str = ""
-    waste_penalty: float = 0.0
+    # Per-turn costs charged when a flag field is truthy in the resulting
+    # observation, e.g. the action accomplished nothing, or the turn was spent
+    # idling with nothing to gain. Charging only on a flag (rather than every
+    # step) lets genuinely useful "quiet" turns — resting off damage — stay free.
+    flag_penalties: dict[str, float] = Field(default_factory=dict)
 
     def compute(self, prev: Observation, cur: Observation, done: bool, info: dict) -> float:
         r = self.step_reward
         for rule in self.rules:
             r += rule.value(prev, cur)
-        if self.waste_field and cur.get(self.waste_field, 0.0) >= 1.0:
-            r += self.waste_penalty
+        for field, penalty in self.flag_penalties.items():
+            if cur.get(field, 0.0) >= 1.0:
+                r += penalty
         if done and cur.get(self.death_field, self.death_threshold + 1.0) <= self.death_threshold:
             r += self.death_reward
         return r

@@ -92,21 +92,30 @@ def spd_reward_spec() -> RewardSpec:
             RewardRule(field="has_amulet", direction="up", weight=200.0),                   # the Amulet of Yendor!
             RewardRule(field="won", direction="up", weight=500.0),                          # finishing the game = best
         ],
-        # No flat survival bonus. A +0.05/step bonus quietly paid the agent to
-        # STALL — surviving ~490 turns on floor 1 banked ~+24 and beat the risk
-        # of a descent that might end in the death penalty, so a DQN run collapsed
-        # to a do-nothing policy. Survival is now incentivised only by NOT dying
-        # (the death penalty) and by staying alive to earn more PROGRESS reward.
+        # No blanket per-turn cost: a flat charge would punish resting off damage,
+        # which is real play (HP regen). Wasteful idling is charged instead — see
+        # flag_penalties below.
         step_reward=0.0,
-        # A wasted action (impossible → degraded to a rest) costs a little, so a
-        # policy can't hide by spamming an impossible no-op (a DQN run collapsed
-        # to descend-with-no-stairs-found, ~a wait, and stopped progressing).
-        # Small: an occasional failed try is nearly free; only SPAM is punished.
-        waste_field="action_wasted",
-        waste_penalty=-0.05,
+        flag_penalties={
+            # An impossible action degraded to a rest: stops a policy hiding by
+            # spamming a no-op (one DQN run collapsed onto descend-with-no-stairs).
+            "action_wasted": -0.05,
+            # Idling with nothing to gain — already at full health, or stalling
+            # past a few turns. Sitting still was FREE, so lingering safely on
+            # floor 1 beat any descent that risked dying, and the agent sat out
+            # 415 of 600 turns at depth 1.17. Resting off damage stays free, so
+            # this charges stalling without punishing recovery.
+            "idle_unproductive": -0.1,
+        },
         death_field="hp_current",
         death_threshold=0.0,
-        death_reward=-50.0,         # death = worst (an Ankh would soften this — future work)
+        # Death is still the worst single event, but -50 against a +10 descent
+        # made never playing the optimal policy: a descent needed >70% survival
+        # odds just to break even, and an agent still learning to fight is far
+        # below that, so it correctly refused to ever take the stairs. At -20 the
+        # expected value of TRYING a floor beats idling the clock out, which is
+        # what lets it practise depth and get good enough to survive there.
+        death_reward=-20.0,
     )
 
 

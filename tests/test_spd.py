@@ -32,5 +32,11 @@ def test_reward_encodes_good_and_bad():
     assert spec.compute(base, obs(enemies_visible=0), False, {}) > 0
     # gaining an item is good
     assert spec.compute(base, obs(inventory_count=6), False, {}) > 0
-    # death is the worst
-    assert spec.compute(obs(hp_current=5), obs(hp_current=0), True, {}) <= -50
+    # death is the worst single event — asserted RELATIVE to the other events
+    # rather than against a magic constant, so retuning the penalty (it was
+    # lowered from -50 because paralysing risk-aversion made never descending
+    # optimal) can't silently make death cheap
+    death = spec.compute(obs(hp_current=5), obs(hp_current=0), True, {})
+    assert death < 0
+    for good in (obs(level=2), obs(depth=2), obs(enemies_visible=0), obs(inventory_count=6)):
+        assert death < -spec.compute(base, good, False, {})

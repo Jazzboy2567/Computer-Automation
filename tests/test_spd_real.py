@@ -198,6 +198,42 @@ def test_descending_outpays_farming_a_floor_and_compounds():
     assert deep > descend * 2, "reaching floor 9 must be worth far more than floor 2"
 
 
+def test_resting_to_heal_is_free_but_stalling_costs():
+    """Sitting still is real play when it buys something (HP regen), so it must
+    stay free — but idling with nothing to gain has to cost, or lingering safely
+    on floor 1 beats any risky descent (the agent sat out 415 of 600 turns)."""
+    from pilot.ml.rl.spd import spd_reward_spec
+
+    reward = spd_reward_spec()
+    hurt = {"hp_current": 8.0, "hp_max": 20.0, "depth": 1.0}
+    # engine marks a resting-while-hurt turn as productive (idle_unproductive=0)
+    resting = reward.compute(hurt, {**hurt, "idle_unproductive": 0}, False, {})
+    stalling = reward.compute(hurt, {**hurt, "idle_unproductive": 1}, False, {})
+    assert resting == 0.0, "resting off damage must be free"
+    assert stalling < resting, "stalling with nothing to gain must cost"
+
+
+def test_trying_a_descent_beats_idling_the_clock_out():
+    """Even a descent that ends in death must beat stalling out the clock, or an
+    agent that cannot yet fight will correctly refuse to ever take the stairs —
+    and so can never practise the depths where it would learn to survive."""
+    from pilot.ml.rl.spd import spd_reward_spec
+
+    reward = spd_reward_spec()
+    steps, start = 600, {"hp_current": 20.0, "depth": 1.0, "inventory_count": 4.0}
+
+    # (a) stall out the whole episode on floor 1 (full HP, so nothing to regain)
+    idle = steps * reward.compute(start, {**start, "idle_unproductive": 1}, False, {})
+
+    # (b) descend to floor 2, pick up a few items, then die halfway through
+    tried = reward.compute(start, {**start, "depth": 2.0}, False, {})
+    tried += reward.compute(start, {**start, "inventory_count": 7.0}, False, {})
+    tried += reward.compute({**start, "depth": 2.0},
+                            {**start, "depth": 2.0, "hp_current": 0.0}, True, {})
+
+    assert tried > idle, "trying and dying must beat never leaving floor 1"
+
+
 def test_wasted_action_is_penalized():
     from pilot.ml.rl.spd import spd_training_reward
 
