@@ -158,13 +158,34 @@ def _rl(args) -> int:
             print(f"\nOK: gated campaign complete — {summary}")
             print(f"  report: {ws.path / 'report.md'}")
             return 0
+        from pathlib import Path as _Path
         from .ml.rl.spd_campaign import challenge_mask
-        from .ml.rl.spd_real_train import run_spd_real_training
+        from .ml.rl.spd_real_train import depth_curriculum, run_spd_real_training
         episodes = args.episodes if args.episodes is not None else 4000
-        result, ws = run_spd_real_training(
-            episodes=episodes, on_event=on_event,
+        common = dict(
             hero=args.hero, challenges=challenge_mask(args.challenges),
             agent_kind=args.agent,
+            curriculum=depth_curriculum(args.curriculum) if args.curriculum else None,
+        )
+        if args.forever:
+            # Train in chunks forever, each chunk resuming from the last, so you
+            # can watch how far it gets. Stop with Ctrl-C; every chunk leaves a
+            # saved policy behind. --episodes sets the chunk size.
+            resume, chunk = _Path(args.resume) if args.resume else None, 0
+            print(f"continuous training: {episodes}-episode chunks, Ctrl-C to stop")
+            while True:
+                chunk += 1
+                result, ws = run_spd_real_training(
+                    episodes=episodes, resume_from=resume, on_event=None, **common)
+                resume = _Path(result.model_path)
+                print(f"[chunk {chunk:>3}] total_eps={chunk*episodes:>7}  "
+                      f"return={result.avg_return_trained:>8.2f}  "
+                      f"avg_floor={result.avg_depth_trained:>4.2f}  "
+                      f"best_floor={result.best_depth}  gear={result.best_gear!r}",
+                      flush=True)
+        result, ws = run_spd_real_training(
+            episodes=episodes, on_event=on_event,
+            resume_from=_Path(args.resume) if args.resume else None, **common,
         )
         print(f"\nOK: avg return trained {result.avg_return_trained} vs random {result.avg_return_random}")
         print(f"  deepest floor: trained {result.avg_depth_trained} vs random {result.avg_depth_random}")
@@ -222,6 +243,16 @@ def main(argv: list[str] | None = None) -> int:
                       help="hero class (spd-real only)")
     p_rl.add_argument("--challenges", type=int, default=0, metavar="N",
                       help="enable the first N SPD challenges, 0-9 (spd-real only)")
+    p_rl.add_argument("--forever", action="store_true",
+                      help="train in repeating chunks, each resuming from the last, "
+                           "until you stop it (--episodes = chunk size); prints "
+                           "return/floor after every chunk (spd-real only)")
+    p_rl.add_argument("--resume", default=None, metavar="POLICY",
+                      help="continue learning from a saved policy.joblib")
+    p_rl.add_argument("--curriculum", type=int, default=0, metavar="MAXFLOOR",
+                      help="start some TRAINING episodes on floors 2..MAXFLOOR so the "
+                           "agent experiences where gear/talents matter (spd-real only); "
+                           "evaluation always starts on floor 1")
     p_rl.add_argument("--campaign", action="store_true",
                       help="gated curriculum: each class must WIN the base game, then "
                            "challenges 1..9 in order, no jumps (spd-real only)")

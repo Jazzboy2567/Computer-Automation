@@ -36,7 +36,7 @@ def test_reset_sends_hero_and_challenge_mask():
     proc = FakeProc([_obs_line()])
     env = SPDRealEnv(seed=50, proc=proc, hero="mage", challenges=challenge_mask(3))
     env.reset()
-    assert proc.commands == ["reset 50 mage 7"]
+    assert proc.commands == ["reset 50 mage 7 1"]   # trailing arg = start floor
 
 
 def test_unknown_hero_rejected():

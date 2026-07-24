@@ -87,13 +87,20 @@ class SPDRealEnv(GameEnv):
     HEROES = ("warrior", "mage", "rogue", "huntress", "duelist", "cleric")
 
     def __init__(self, seed: int = 0, max_steps: int = 600, proc: Any = None,
-                 hero: str = "warrior", challenges: int = 0):
+                 hero: str = "warrior", challenges: int = 0, curriculum: Any = None):
         if hero not in self.HEROES:
             raise ValueError(f"unknown hero {hero!r}; one of {self.HEROES}")
         self.base_seed = seed
         self.max_steps = max_steps
         self.hero = hero
         self.challenges = challenges          # SPD challenge bitmask
+        # Optional callable (episode_index) -> starting floor. An agent that always
+        # dies on floor 2 never sees the depths where gear/talents/bosses matter,
+        # so it can't learn they matter; starting some episodes deeper breaks that
+        # loop. Only the starting position changes — play is never scripted.
+        # Evaluation leaves this None so it always measures the real task (floor 1).
+        self.curriculum = curriculum
+        self.start_depth = 1                  # what the last reset() actually used
         self.steps = 0
         self.episode = 0
         # best run served by this env instance (training or eval), for reporting
@@ -135,7 +142,13 @@ class SPDRealEnv(GameEnv):
     # ------------------------------------------------------------- GameEnv
     def reset(self) -> Observation:
         self.steps = 0
-        reply = self._send(f"reset {self.base_seed + self.episode} {self.hero} {self.challenges}")
+        depth = 1
+        if self.curriculum is not None:
+            depth = max(1, int(self.curriculum(self.episode)))
+        self.start_depth = depth
+        reply = self._send(
+            f"reset {self.base_seed + self.episode} {self.hero} {self.challenges} {depth}"
+        )
         self.episode += 1
         return self._to_obs(reply)
 
@@ -147,7 +160,9 @@ class SPDRealEnv(GameEnv):
         info = {"depth": obs.get("depth", 1.0), "turns": reply.get("turns", 0),
                 "won": bool(obs.get("won", 0.0)), "gear": reply.get("gear", "")}
         depth = int(obs.get("depth", 1))
-        if depth > self.best_depth:
+        # only count floors reached from a real floor-1 start — a curriculum
+        # episode that BEGINS on floor 4 hasn't achieved floor 4
+        if self.start_depth == 1 and depth > self.best_depth:
             self.best_depth = depth
             self.best_gear = info["gear"]
         return obs, done, info
