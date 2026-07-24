@@ -238,7 +238,11 @@ def run_continuous(
                 "workspace": str(ws.path),
             }
             if on_interval:
-                on_interval(info)
+                # a reporting error must never throw away hours of training
+                try:
+                    on_interval(info)
+                except Exception as e:
+                    print(f"[interval {k}] report failed (continuing): {e!r}", flush=True)
     finally:
         train_env.close()
         eval_env.close()

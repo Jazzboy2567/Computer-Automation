@@ -171,8 +171,11 @@ def _rl(args) -> int:
             print(f"continuous training: {episodes}-episode intervals, Ctrl-C to stop")
 
             def _report_interval(i):
+                # plain ASCII: this line is redirected to a file whose codec on
+                # Windows can't encode non-ASCII (a stray Greek epsilon killed the
+                # whole run once), so keep it to characters that always encode
                 print(f"[{i['interval']:>3}] eps_total={i['total_eps']:>7} "
-                      f"ε={i['eps']:.2f}  return={i['return']:>8.2f} "
+                      f"eps={i['eps']:.2f}  return={i['return']:>8.2f} "
                       f"(rand {i['return_random']:.0f})  floor={i['depth']:>4.2f}  "
                       f"best={i['best_depth']} gear={i['best_gear']!r}  "
                       f"curve {i['curve_start']:.0f}->{i['curve_end']:.0f}", flush=True)
