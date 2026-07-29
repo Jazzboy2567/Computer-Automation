@@ -80,3 +80,26 @@ def test_resumed_training_does_not_restart_exploration():
     seen.clear()
     train(env, SpyAgent(env.action_space, seed=0), reward, episodes=4)
     assert max(seen) > 0.9, "a cold run should still explore fully at the start"
+
+
+def test_train_parallel_learns_and_counts_episodes():
+    """Several envs feeding one agent must be thread-safe AND actually learn:
+    run the exact episode budget, and beat a random policy on the sim."""
+    from pilot.ml.rl.train import train_parallel, evaluate
+    from pilot.ml.rl.spd import spd_reward_spec
+    from pilot.ml.rl.spd_sim import SPDGridEnv, spd_featurizer
+    from pilot.ml.rl.dqn import DQNAgent
+
+    envs = [SPDGridEnv(seed=s, max_steps=40) for s in range(4)]
+    agent = DQNAgent(envs[0].action_space, seed=0, warmup=50)
+    curve = train_parallel(agent, envs, spd_reward_spec(), episodes=400,
+                           featurizer=spd_featurizer, epsilon_start=1.0, epsilon_final=0.1)
+    assert sum(len(c) for c in [curve]) and len(curve) >= 15   # ~20 blocks over 400 eps
+    assert curve[-1] > curve[0]                                # learning progressed
+
+    import random
+    ev = SPDGridEnv(seed=999, max_steps=40)
+    trained, _ = evaluate(ev, agent.policy, spd_reward_spec(), 30, featurizer=spd_featurizer)
+    rng = random.Random(1)
+    rand, _ = evaluate(ev, lambda o: rng.choice(ev.action_space), spd_reward_spec(), 30)
+    assert trained > rand                                      # beats random

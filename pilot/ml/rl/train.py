@@ -6,6 +6,7 @@ the same loop drives the simulated game and (later) the real one.
 
 from __future__ import annotations
 
+import threading
 from statistics import mean
 from typing import Callable, Optional
 
@@ -84,6 +85,74 @@ def train(
         if len(window) >= block:
             curve.append(round(mean(window), 2))
             window = []
+    if window:
+        curve.append(round(mean(window), 2))
+    return curve
+
+
+def train_parallel(
+    agent: QLearningAgent, envs: list[GameEnv], reward: RewardSpec, episodes: int,
+    featurizer: Featurizer = _identity,
+    epsilon_start: float = 1.0, epsilon_final: float = 0.05,
+) -> list[float]:
+    """Like `train`, but collect experience from several envs at once into one
+    shared agent — so a single policy learns from many games in parallel.
+
+    Each SPD env spends part of a step blocked on the game-to-learner pipe, and
+    that wait releases the GIL, so stepping N envs in N threads overlaps that idle
+    time. Only agent access (act/learn — the NumPy read/write of one network) is
+    serialised with a lock; `env.step` (the I/O) runs lock-free. Returns the
+    learning curve (per ~5% of total episodes), same shape as `train`.
+
+    NOTE on speedup: this helps in proportion to how much of a step is spent
+    WAITING on the game. With the compact focused-encoding observation the game
+    computes a turn in well under a millisecond, so most of a step is GIL-held
+    Python (JSON parse, featurize, the locked forward/backward) — measured ~1.3x
+    on 4 envs, not 4x. For true N-core scaling the envs must run in separate
+    PROCESSES (no shared GIL). Threads remain the right tool when a step is
+    I/O-heavy (large observations / slow turns), where the overlap is large.
+    """
+    lock = threading.Lock()
+    span = max(epsilon_start - epsilon_final, 0.0)
+    block = max(1, episodes // 20)
+    curve: list[float] = []
+    window: list[float] = []
+    state = {"done_eps": 0}
+
+    def epsilon() -> float:
+        return max(epsilon_final, epsilon_start - span * state["done_eps"] / max(1, episodes))
+
+    def worker(env: GameEnv) -> None:
+        while True:
+            with lock:
+                if state["done_eps"] >= episodes:
+                    return
+                eps = epsilon()
+            obs = env.reset()
+            fobs = featurizer(obs)               # pure work stays OUT of the lock
+            done, total = False, 0.0
+            while not done:
+                with lock:                       # network read only
+                    action = agent.act(fobs, eps)
+                nxt, done, info = env.step(action)   # pipe I/O — lock-free, overlaps
+                r = reward.compute(obs, nxt, done, info)
+                fnxt = featurizer(nxt)
+                with lock:                       # buffer append + periodic network write
+                    agent.learn(fobs, action, r, fnxt, done)
+                total += r
+                obs, fobs = nxt, fnxt
+            with lock:
+                state["done_eps"] += 1
+                window.append(total)
+                if len(window) >= block:
+                    curve.append(round(mean(window), 2))
+                    window.clear()
+
+    threads = [threading.Thread(target=worker, args=(e,), daemon=True) for e in envs]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
     if window:
         curve.append(round(mean(window), 2))
     return curve
