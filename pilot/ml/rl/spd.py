@@ -13,6 +13,8 @@ SPD is turn-based, so the loop is unhurried: screenshot -> extract these fields
 
 from __future__ import annotations
 
+import os
+
 from .reward import RewardRule, RewardSpec
 
 # The structured observation read from each frame (the "consistent important
@@ -60,6 +62,16 @@ SPD_ACTIONS: list[str] = [
     "talent_0", "talent_1", "talent_2", "talent_3",
     "wait",                                    # pass a turn (passive regen)
 ]
+
+
+def _hp_penalty_weight() -> float:
+    try:
+        return max(0.0, float(os.environ.get("PILOT_HP_PENALTY", "0") or "0"))
+    except ValueError:
+        return 0.0
+
+
+_HP_PENALTY = _hp_penalty_weight()
 
 
 def spd_reward_spec() -> RewardSpec:
@@ -112,6 +124,18 @@ def spd_reward_spec() -> RewardSpec:
                        per_unit=True, scale_by="stall_streak", scale_cap=25.0),
             RewardRule(field="has_amulet", direction="up", weight=200.0),                   # the Amulet of Yendor!
             RewardRule(field="won", direction="up", weight=500.0),                          # finishing the game = best
+            # OPTIONAL convex HP penalty (env PILOT_HP_PENALTY, a float weight; 0/off
+            # by default). Diagnosis of the floor-2 plateau: the agent fights every
+            # enemy and trades HP for kills until it dies, because losing HP is nearly
+            # free (-0.05/hp) next to a kill (+5 level). This adds a term that costs
+            # MORE the lower the hero already is (scaled by hp_missing_frac, 0 at full
+            # health, ~1 near death), so damage taken while low hurts a lot while a
+            # scratch at full HP stays cheap. It teaches preserve-health / disengage /
+            # heal as a LEARNED consequence — no scripted retreat. Runs A/B against
+            # the baseline (var unset) to isolate whether valuing HP breaks the wall.
+            *([RewardRule(field="hp_current", direction="down", per_unit=True,
+                          weight=-_HP_PENALTY, scale_by="hp_missing_frac")]
+              if _HP_PENALTY > 0 else []),
         ],
         # No blanket per-turn cost: a flat charge would punish resting off damage,
         # which is real play (HP regen). Wasteful idling is charged instead — see

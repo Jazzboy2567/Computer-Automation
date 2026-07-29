@@ -137,6 +137,9 @@ class SPDRealEnv(GameEnv):
             obs[k] = v if isinstance(v, list) else float(v)
         if obs.get("stairs_dist", 0.0) < 0:
             obs["stairs_dist"] = UNKNOWN_STAIRS_DIST
+        # how close to death, 0 at full health .. ~1 near death — lets a reward
+        # penalise HP loss convexly (costs more the lower you already are)
+        obs["hp_missing_frac"] = max(0.0, 1.0 - obs.get("hp_frac", 1.0))
         return obs
 
     # ------------------------------------------------------------- GameEnv
