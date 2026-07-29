@@ -182,7 +182,7 @@ def run_continuous(
     challenges: int = 0,
     agent_kind: str = "dqn",
     curriculum: Any = None,
-    decay_episodes: int = 24000,
+    decay_episodes: int = 40000,
     on_interval: Optional[Callable[[dict], None]] = None,
 ):
     """Train ONE agent indefinitely, reporting every `interval` episodes.
@@ -215,6 +215,7 @@ def run_continuous(
     eval_env.best_depth, eval_env.best_gear = 0, ""   # don't credit random's floors
 
     done_eps, k = 0, 0
+    best_score = None                                 # (avg_depth, avg_return) high-water mark
     try:
         while True:
             k += 1
@@ -226,8 +227,14 @@ def run_continuous(
             eval_env.episode = 0                      # replay the same eval dungeons
             rt, st, dt = _evaluate(eval_env, agent.policy, reward, eval_episodes, feat=feat)
 
-            model_path = ws.model_dir / "policy.joblib"
-            joblib.dump(agent.Q, model_path)
+            joblib.dump(agent.Q, ws.model_dir / "policy.joblib")   # latest, always
+            # keep the best-so-far separately, so a long run that later drifts or
+            # destabilises never loses its high point (depth first, then return)
+            new_best = ""
+            if best_score is None or (dt, rt) > best_score:
+                best_score = (dt, rt)
+                joblib.dump(agent.Q, ws.model_dir / "policy_best.joblib")
+                new_best = "  <== new best"
 
             info = {
                 "interval": k, "total_eps": done_eps, "eps": round(e1, 3),
@@ -235,7 +242,7 @@ def run_continuous(
                 "depth": round(dt, 2), "survival": round(st, 1),
                 "best_depth": eval_env.best_depth, "best_gear": eval_env.best_gear,
                 "curve_start": curve[0], "curve_end": curve[-1],
-                "workspace": str(ws.path),
+                "new_best": new_best, "workspace": str(ws.path),
             }
             if on_interval:
                 # a reporting error must never throw away hours of training
