@@ -178,11 +178,13 @@ def _rl(args) -> int:
                       f"eps={i['eps']:.2f}  return={i['return']:>8.2f} "
                       f"(rand {i['return_random']:.0f})  floor={i['depth']:>4.2f}  "
                       f"best={i['best_depth']} gear={i['best_gear']!r}  "
-                      f"curve {i['curve_start']:.0f}->{i['curve_end']:.0f}", flush=True)
+                      f"curve {i['curve_start']:.0f}->{i['curve_end']:.0f}"
+                      f"{i['new_best']}", flush=True)
 
             run_continuous(interval=episodes, hero=args.hero,
                            challenges=challenge_mask(args.challenges),
                            agent_kind=args.agent, curriculum=curriculum,
+                           decay_episodes=args.decay,
                            on_interval=_report_interval)
             return 0
         result, ws = run_spd_real_training(
@@ -253,6 +255,9 @@ def main(argv: list[str] | None = None) -> int:
                            "return/floor after every chunk (spd-real only)")
     p_rl.add_argument("--resume", default=None, metavar="POLICY",
                       help="continue learning from a saved policy.joblib")
+    p_rl.add_argument("--decay", type=int, default=40000, metavar="EPISODES",
+                      help="episodes over which exploration anneals 1.0->0.05 in a "
+                           "--forever run (longer = explores longer; spd-real only)")
     p_rl.add_argument("--curriculum", type=int, default=0, metavar="MAXFLOOR",
                       help="start some TRAINING episodes on floors 2..MAXFLOOR so the "
                            "agent experiences where gear/talents matter (spd-real only); "
