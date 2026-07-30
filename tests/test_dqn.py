@@ -142,3 +142,60 @@ def test_prioritized_and_uniform_both_learn_the_bandit():
 
     assert bandit(True) == "right"
     assert bandit(False) == "right"
+
+
+def test_dueling_network_learns_and_roundtrips():
+    """Dueling head must learn the bandit AND survive a Q snapshot roundtrip
+    (the snapshot has to rebuild the dueling architecture, not a plain head)."""
+    from pilot.ml.rl.dqn import DQNAgent, _DuelingMLP
+
+    ag = DQNAgent(["left", "right"], seed=2, warmup=20, dueling=True)
+    for _ in range(400):
+        ag.learn({"s": 1.0}, "right", 1.0, {"s": 1.0}, True)
+        ag.learn({"s": 1.0}, "left", 0.0, {"s": 1.0}, True)
+    assert ag.policy({"s": 1.0}) == "right"
+    assert isinstance(ag._net, _DuelingMLP)
+
+    snap = ag.Q
+    assert snap["dueling"] is True
+    ag2 = DQNAgent(["left", "right"], seed=9, dueling=False)   # wrong default...
+    ag2.Q = snap                                               # ...snapshot must fix it
+    assert isinstance(ag2._net, _DuelingMLP)
+    assert ag2.policy({"s": 1.0}) == ag.policy({"s": 1.0})
+
+
+def test_dueling_backward_matches_numeric_gradient():
+    """Sanity-check the hand-written dueling backprop against a finite-difference
+    gradient, so a subtle mistake in the V/advantage split can't slip through.
+    Done in float64 so numerical noise can't mask (or fake) a match."""
+    import numpy as np
+    from pilot.ml.rl.dqn import _DuelingMLP
+
+    rng = np.random.default_rng(0)
+    net = _DuelingMLP(4, 3, 8, rng)
+    p64 = {k: v.astype(np.float64) for k, v in net.params.items()}
+    x = rng.normal(size=(5, 4))
+    dq = rng.normal(size=(5, 3))
+
+    def loss():
+        z1 = x @ p64["W1"] + p64["b1"]; a1 = np.maximum(z1, 0)
+        z2 = a1 @ p64["W2"] + p64["b2"]; a2 = np.maximum(z2, 0)
+        v = a2 @ p64["Wv"] + p64["bv"]; adv = a2 @ p64["Wa"] + p64["ba"]
+        q = v + adv - adv.mean(1, keepdims=True)
+        return (q * dq).sum()
+
+    # analytic gradient for Wa, exactly as backward_step computes it
+    z1 = x @ p64["W1"] + p64["b1"]; a2 = np.maximum(x @ p64["W1"] + p64["b1"], 0)
+    a1 = np.maximum(z1, 0); a2 = np.maximum(a1 @ p64["W2"] + p64["b2"], 0)
+    analytic = a2.T @ (dq - dq.mean(1, keepdims=True))
+
+    eps = 1e-6
+    num = np.zeros_like(p64["Wa"])
+    for i in range(p64["Wa"].shape[0]):
+        for j in range(p64["Wa"].shape[1]):
+            orig = p64["Wa"][i, j]
+            p64["Wa"][i, j] = orig + eps; hi = loss()
+            p64["Wa"][i, j] = orig - eps; lo = loss()
+            p64["Wa"][i, j] = orig
+            num[i, j] = (hi - lo) / (2 * eps)
+    assert np.allclose(num, analytic, atol=1e-6, rtol=1e-5)

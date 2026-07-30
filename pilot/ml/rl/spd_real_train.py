@@ -100,8 +100,14 @@ def make_agent(kind: str, actions: list[str], seed: int = 0):
     the FULL observation (featurizer identity). Returns (agent, featurizer)."""
     if kind == "dqn":
         from .dqn import DQNAgent
-        # bigger hidden layer: the input now includes the ~810-cell egocentric map
-        return DQNAgent(actions, seed=seed, hidden=128), spd_map_featurizer
+        # Dueling head + a bigger trunk, for the combat-survival ceiling: separating
+        # state value from per-action advantage tends to be steadier than the plain
+        # Q-head (which destabilised under prioritized replay), and the extra width
+        # gives more capacity to represent floor 2-3 positioning. The featurizer
+        # passes the focused-encoding scalars through (and unpacks the dense map iff
+        # it's enabled).
+        return (DQNAgent(actions, seed=seed, hidden=256, dueling=True),
+                spd_map_featurizer)
     return QLearningAgent(actions, seed=seed), spd_featurizer
 
 
