@@ -84,7 +84,7 @@ class DQNAgent:
                  lr: float = 1e-3, gamma: float = 0.99,
                  buffer_size: int = 50_000, batch_size: int = 64,
                  warmup: int = 500, learn_every: int = 4, sync_every: int = 1000,
-                 prioritized: bool = True, prio_alpha: float = 0.6,
+                 prioritized: bool = False, prio_alpha: float = 0.6,
                  prio_beta: float = 0.4, prio_eps: float = 1e-3):
         self.actions = list(actions)
         self.gamma = gamma
@@ -94,12 +94,14 @@ class DQNAgent:
         self.learn_every = learn_every
         self.sync_every = sync_every
         # Prioritized replay: sample transitions in proportion to how SURPRISING
-        # they were (|TD error|), not uniformly. The rare floor 2-3 deaths and
-        # close calls that the agent must learn from are a tiny fraction of a 50k
-        # uniform buffer, so it almost never trains on them; prioritizing them is
-        # aimed squarely at the combat-survival ceiling. alpha = how strongly to
-        # prioritize (0 = uniform), beta = importance-sampling correction for the
-        # bias that introduces.
+        # they were (|TD error|), not uniformly. The idea was to make the agent
+        # train more on the rare floor 2-3 deaths that a 50k uniform buffer
+        # drowns. In practice, at alpha=0.6/beta=0.4 it DESTABILISED learning —
+        # over-focusing on the big-negative-TD death transitions collapsed the
+        # policy back to floor 1 (return -35 vs uniform +100+). So it is OFF by
+        # default; kept as an option to revisit with gentler settings (lower
+        # alpha, annealed beta). alpha = prioritization strength (0 = uniform),
+        # beta = importance-sampling correction for the bias it introduces.
         self.prioritized = prioritized
         self.prio_alpha = prio_alpha
         self.prio_beta = prio_beta
