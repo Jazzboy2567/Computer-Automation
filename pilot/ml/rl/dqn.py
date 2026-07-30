@@ -14,7 +14,6 @@ observation (featurizer = identity), not a hand-compacted key subset.
 from __future__ import annotations
 
 import random
-from collections import deque
 from typing import Optional
 
 import numpy as np
@@ -84,7 +83,9 @@ class DQNAgent:
     def __init__(self, actions: list[str], seed: int = 0, hidden: int = 64,
                  lr: float = 1e-3, gamma: float = 0.99,
                  buffer_size: int = 50_000, batch_size: int = 64,
-                 warmup: int = 500, learn_every: int = 4, sync_every: int = 1000):
+                 warmup: int = 500, learn_every: int = 4, sync_every: int = 1000,
+                 prioritized: bool = True, prio_alpha: float = 0.6,
+                 prio_beta: float = 0.4, prio_eps: float = 1e-3):
         self.actions = list(actions)
         self.gamma = gamma
         self.lr = lr
@@ -92,6 +93,17 @@ class DQNAgent:
         self.warmup = warmup
         self.learn_every = learn_every
         self.sync_every = sync_every
+        # Prioritized replay: sample transitions in proportion to how SURPRISING
+        # they were (|TD error|), not uniformly. The rare floor 2-3 deaths and
+        # close calls that the agent must learn from are a tiny fraction of a 50k
+        # uniform buffer, so it almost never trains on them; prioritizing them is
+        # aimed squarely at the combat-survival ceiling. alpha = how strongly to
+        # prioritize (0 = uniform), beta = importance-sampling correction for the
+        # bias that introduces.
+        self.prioritized = prioritized
+        self.prio_alpha = prio_alpha
+        self.prio_beta = prio_beta
+        self.prio_eps = prio_eps
 
         self._rng = random.Random(seed)
         self._nprng = np.random.default_rng(seed)
@@ -101,7 +113,19 @@ class DQNAgent:
         self._net: Optional[_MLP] = None
         self._target: Optional[_MLP] = None
         self._hidden = hidden
-        self._buffer: deque = deque(maxlen=buffer_size)
+        # circular replay buffer as preallocated arrays (needed so priorities stay
+        # aligned with transitions and sampling/updates are O(1) indexed) —
+        # allocated lazily on the first learn, once the feature width is known
+        self._cap = buffer_size
+        self._obs_buf: Optional[np.ndarray] = None
+        self._nobs_buf: Optional[np.ndarray] = None
+        self._act_buf: Optional[np.ndarray] = None
+        self._rew_buf: Optional[np.ndarray] = None
+        self._done_buf: Optional[np.ndarray] = None
+        self._prio_buf: Optional[np.ndarray] = None
+        self._pos = 0
+        self._size = 0
+        self._max_prio = 1.0
         self._steps = 0
         self._updates = 0
 
@@ -163,20 +187,48 @@ class DQNAgent:
         q, _ = self._net.forward(x[None, :])
         return self.actions[int(np.argmax(q[0]))]
 
+    def _alloc(self, d: int) -> None:
+        if self._obs_buf is not None:
+            return
+        cap = self._cap
+        self._obs_buf = np.zeros((cap, d), np.float32)
+        self._nobs_buf = np.zeros((cap, d), np.float32)
+        self._act_buf = np.zeros(cap, np.int64)
+        self._rew_buf = np.zeros(cap, np.float32)
+        self._done_buf = np.zeros(cap, bool)
+        self._prio_buf = np.zeros(cap, np.float32)
+
     def learn(self, obs: Observation, action: str, reward: float,
               next_obs: Observation, done: bool) -> None:
-        self._buffer.append((self._vec(obs), self.actions.index(action),
-                             float(reward), self._vec(next_obs), bool(done)))
+        x, nx = self._vec(obs), self._vec(next_obs)
+        self._alloc(len(x))
+        i = self._pos
+        self._obs_buf[i] = x
+        self._nobs_buf[i] = nx
+        self._act_buf[i] = self.actions.index(action)
+        self._rew_buf[i] = reward
+        self._done_buf[i] = done
+        self._prio_buf[i] = self._max_prio      # new transitions get top priority
+        self._pos = (i + 1) % self._cap
+        self._size = min(self._size + 1, self._cap)
+
         self._steps += 1
-        if len(self._buffer) < self.warmup or self._steps % self.learn_every:
+        if self._size < self.warmup or self._steps % self.learn_every:
             return
 
-        batch = self._rng.sample(range(len(self._buffer)), min(self.batch_size, len(self._buffer)))
-        xs = np.stack([self._buffer[i][0] for i in batch])
-        acts = np.array([self._buffer[i][1] for i in batch])
-        rews = np.array([self._buffer[i][2] for i in batch], np.float32)
-        nxts = np.stack([self._buffer[i][3] for i in batch])
-        dones = np.array([self._buffer[i][4] for i in batch], bool)
+        n, k = self._size, min(self.batch_size, self._size)
+        if self.prioritized:
+            scaled = self._prio_buf[:n] ** self.prio_alpha
+            probs = scaled / scaled.sum()
+            idx = self._nprng.choice(n, k, p=probs)
+            weights = (n * probs[idx]) ** (-self.prio_beta)
+            weights = (weights / weights.max()).astype(np.float32)   # IS correction
+        else:
+            idx = self._nprng.choice(n, k, replace=False)
+            weights = np.ones(k, np.float32)
+
+        xs, acts = self._obs_buf[idx], self._act_buf[idx]
+        rews, nxts, dones = self._rew_buf[idx], self._nobs_buf[idx], self._done_buf[idx]
 
         # Double DQN: the ONLINE net selects the next action, the TARGET net
         # evaluates it. Vanilla `max` over the target net systematically
@@ -185,15 +237,19 @@ class DQNAgent:
         # descending. Decoupling selection from evaluation curbs that.
         next_acts = self._net.forward(nxts)[0].argmax(1)
         q_next, _ = self._target.forward(nxts)
-        q_next_sel = q_next[np.arange(len(batch)), next_acts]
+        q_next_sel = q_next[np.arange(k), next_acts]
         targets = rews + np.where(dones, 0.0, self.gamma * q_next_sel)
 
         q, cache = self._net.forward(xs)
+        ar = np.arange(k)
+        td_raw = q[ar, acts] - targets
+        # the fresh |TD error| becomes each transition's new priority
+        self._prio_buf[idx] = np.abs(td_raw) + self.prio_eps
+        self._max_prio = max(self._max_prio, float(self._prio_buf[idx].max()))
+
         dq = np.zeros_like(q)
-        idx = np.arange(len(batch))
-        # clipped TD error (Huber-style gradient) for stability
-        td = np.clip(q[idx, acts] - targets, -1.0, 1.0)
-        dq[idx, acts] = td / len(batch)
+        # clipped TD error (Huber-style gradient) x IS weight, for stability
+        dq[ar, acts] = (np.clip(td_raw, -1.0, 1.0) * weights) / k
         self._net.backward_step(cache, dq, self.lr)
 
         self._updates += 1

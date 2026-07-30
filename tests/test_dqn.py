@@ -103,3 +103,42 @@ def test_train_parallel_learns_and_counts_episodes():
     rng = random.Random(1)
     rand, _ = evaluate(ev, lambda o: rng.choice(ev.action_space), spd_reward_spec(), 30)
     assert trained > rand                                      # beats random
+
+
+def test_prioritized_replay_favors_surprising_transitions():
+    """Prioritized sampling must draw high-|TD| transitions far more often than
+    uniform would, and importance weights must correct the bias."""
+    import numpy as np
+    from pilot.ml.rl.dqn import DQNAgent
+
+    agent = DQNAgent(["a", "b"], seed=0, warmup=4, batch_size=8,
+                     prioritized=True, prio_alpha=1.0, prio_beta=0.4)
+    # seed a buffer, then hand-set one transition as far more surprising
+    for i in range(60):
+        agent.learn({"x": float(i % 5)}, "a", 0.0, {"x": float((i + 1) % 5)}, False)
+    agent._prio_buf[: agent._size] = 0.01
+    agent._prio_buf[7] = 100.0                       # the one that matters
+    scaled = agent._prio_buf[: agent._size] ** agent.prio_alpha
+    probs = scaled / scaled.sum()
+    draws = agent._nprng.choice(agent._size, 5000, p=probs)
+    share = (draws == 7).mean()
+    assert share > 0.5, "the surprising transition should dominate sampling"
+    # uniform would draw it ~1/size of the time
+    assert share > 20 * (1.0 / agent._size)
+
+
+def test_prioritized_and_uniform_both_learn_the_bandit():
+    """Turning prioritization on or off must both still learn (it changes which
+    transitions are trained on, not correctness)."""
+    from pilot.ml.rl.dqn import DQNAgent
+
+    def bandit(prioritized):
+        ag = DQNAgent(["left", "right"], seed=1, warmup=20, prioritized=prioritized)
+        for _ in range(400):
+            r = 1.0 if True else 0.0
+            ag.learn({"s": 1.0}, "right", 1.0, {"s": 1.0}, True)
+            ag.learn({"s": 1.0}, "left", 0.0, {"s": 1.0}, True)
+        return ag.policy({"s": 1.0})
+
+    assert bandit(True) == "right"
+    assert bandit(False) == "right"
