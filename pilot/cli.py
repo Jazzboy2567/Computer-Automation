@@ -184,7 +184,7 @@ def _rl(args) -> int:
             run_continuous(interval=episodes, hero=args.hero,
                            challenges=challenge_mask(args.challenges),
                            agent_kind=args.agent, curriculum=curriculum,
-                           decay_episodes=args.decay,
+                           decay_episodes=args.decay, max_steps=args.max_steps,
                            on_interval=_report_interval)
             return 0
         result, ws = run_spd_real_training(
@@ -255,6 +255,9 @@ def main(argv: list[str] | None = None) -> int:
                            "return/floor after every chunk (spd-real only)")
     p_rl.add_argument("--resume", default=None, metavar="POLICY",
                       help="continue learning from a saved policy.joblib")
+    p_rl.add_argument("--max-steps", type=int, default=600, metavar="N",
+                      help="max agent actions per episode (spd-real --forever); lower "
+                           "speeds training when episodes now survive to the cap")
     p_rl.add_argument("--decay", type=int, default=40000, metavar="EPISODES",
                       help="episodes over which exploration anneals 1.0->0.05 in a "
                            "--forever run (longer = explores longer; spd-real only)")

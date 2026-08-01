@@ -100,14 +100,13 @@ def make_agent(kind: str, actions: list[str], seed: int = 0):
     the FULL observation (featurizer identity). Returns (agent, featurizer)."""
     if kind == "dqn":
         from .dqn import DQNAgent
-        # Dueling head + a bigger trunk, for the combat-survival ceiling: separating
-        # state value from per-action advantage tends to be steadier than the plain
-        # Q-head (which destabilised under prioritized replay), and the extra width
-        # gives more capacity to represent floor 2-3 positioning. The featurizer
-        # passes the focused-encoding scalars through (and unpacks the dense map iff
-        # it's enabled).
-        return (DQNAgent(actions, seed=seed, hidden=256, dueling=True),
-                spd_map_featurizer)
+        # hidden=128 over the ~104-feature focused encoding. Dueling (available via
+        # dueling=True) and a 256-wide trunk were tried for the combat ceiling and
+        # came out neutral-to-worse AND much slower per step — with the geared
+        # curriculum's now-survivable (longer) episodes that made an interval take
+        # hours. This is the proven-fast config; the featurizer passes the focused
+        # scalars through (and unpacks the dense map iff it's enabled).
+        return DQNAgent(actions, seed=seed, hidden=128), spd_map_featurizer
     return QLearningAgent(actions, seed=seed), spd_featurizer
 
 
