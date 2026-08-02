@@ -227,6 +227,11 @@ def spd_featurizer(obs: Observation) -> Observation:
     return feat
 
 
+def sim_env_factory(seed: int, max_steps: int = 150) -> "SPDGridEnv":
+    """Module-level (picklable) factory for the multiprocessing trainer's workers."""
+    return SPDGridEnv(seed=seed, max_steps=max_steps)
+
+
 # The egocentric map window (rlbridge Observations.MAP_*): one bitmask per tile,
 # 10 channels. The DQN needs it unpacked into 0/1 planes — a categorical bitmask
 # fed raw would imply false ordinality between terrain types.

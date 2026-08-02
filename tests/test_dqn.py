@@ -199,3 +199,34 @@ def test_dueling_backward_matches_numeric_gradient():
             p64["Wa"][i, j] = orig
             num[i, j] = (hi - lo) / (2 * eps)
     assert np.allclose(num, analytic, atol=1e-6, rtol=1e-5)
+
+
+def test_store_train_split_and_weight_export_import():
+    """The multiprocessing trainer relies on: storing a pre-featurized transition
+    separately from taking a gradient step, and exporting/importing just the
+    online weights so a worker can act with the learner's latest policy."""
+    import numpy as np
+    from pilot.ml.rl.dqn import DQNAgent
+
+    learner = DQNAgent(["left", "right"], seed=0, warmup=10)
+    # learn the bandit via the split API (store_vec + train_step), as the mp loop does
+    learner._vec({"s": 1.0})                      # lock schema + build net
+    for _ in range(300):
+        for a, r in ((1, 1.0), (0, 0.0)):
+            v = learner._vec({"s": 1.0})
+            learner.store_vec(v, a, r, v, True)
+            learner._steps += 1
+            if learner._steps % learner.learn_every == 0:
+                learner.train_step()
+    assert learner.policy({"s": 1.0}) == "right"
+
+    # a worker importing the learner's weights must reproduce its greedy policy,
+    # and must NOT drift its frozen normalisation scale while acting
+    worker = DQNAgent(["left", "right"], seed=99)
+    worker.import_weights(learner.export_weights())
+    worker._freeze_scale = True
+    scale_before = worker._scale.copy()
+    assert worker.policy({"s": 1.0}) == learner.policy({"s": 1.0})
+    for _ in range(20):
+        worker.act({"s": 5.0}, epsilon=0.0)       # large feature would grow an unfrozen scale
+    assert np.array_equal(worker._scale, scale_before)   # frozen: unchanged

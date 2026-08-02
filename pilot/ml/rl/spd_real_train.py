@@ -95,6 +95,16 @@ def depth_curriculum(max_depth: int = 4, prob: float = 0.35, seed: int = 0):
     return pick
 
 
+def spd_env_factory(seed: int, hero: str = "warrior", challenges: int = 0,
+                    max_steps: int = 300, curriculum_max_depth: int = 0):
+    """Module-level (picklable) factory for the multiprocessing trainer's workers.
+    Rebuilds the curriculum locally from params (a closure can't cross a spawn)."""
+    from .spd_real import SPDRealEnv
+    cur = depth_curriculum(curriculum_max_depth, seed=seed) if curriculum_max_depth else None
+    return SPDRealEnv(seed=seed, hero=hero, challenges=challenges,
+                      max_steps=max_steps, curriculum=cur)
+
+
 def make_agent(kind: str, actions: list[str], seed: int = 0):
     """'table' = tabular Q over the compact featurizer; 'dqn' = neural net over
     the FULL observation (featurizer identity). Returns (agent, featurizer)."""
