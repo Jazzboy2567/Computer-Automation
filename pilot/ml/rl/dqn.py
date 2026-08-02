@@ -197,6 +197,9 @@ class DQNAgent:
         self._max_prio = 1.0
         self._steps = 0
         self._updates = 0
+        # a worker in the multiprocessing trainer acts on the learner's synced
+        # scale read-only, so it must not drift its own running-max normalisation
+        self._freeze_scale = False
 
     # ------------------------------------------------------------ features
     def _vec(self, obs: Observation) -> np.ndarray:
@@ -216,7 +219,8 @@ class DQNAgent:
         for k in self._array_keys:
             parts.append(np.asarray(obs[k], np.float32))
         x = np.concatenate(parts) if len(parts) > 1 else parts[0]
-        np.maximum(self._scale, np.abs(x), out=self._scale)   # running max magnitude
+        if not self._freeze_scale:
+            np.maximum(self._scale, np.abs(x), out=self._scale)   # running max magnitude
         return x / self._scale
 
     # ------------------------------------------------------------ interface
@@ -247,6 +251,32 @@ class DQNAgent:
         self._target = self._make_net(n_in)
         self._target.copy_from(self._net)
 
+    # -------------------------------------------------- multiprocessing weight sync
+    def export_weights(self) -> Optional[dict]:
+        """Light snapshot for broadcasting to workers each round: online-net params
+        + the feature schema/scale. No target net, no buffer (workers only act)."""
+        if self._net is None:
+            return None
+        return {"params": {k: v.copy() for k, v in self._net.params.items()},
+                "scale": None if self._scale is None else self._scale.copy(),
+                "keys": self._keys, "array_keys": list(self._array_keys),
+                "dueling": self.dueling}
+
+    def import_weights(self, w: Optional[dict]) -> None:
+        """Load broadcast weights into a worker's local net (builds it on first use)."""
+        if not w:
+            return
+        self._keys = list(w["keys"]) if w["keys"] is not None else None
+        self._array_keys = list(w.get("array_keys", []))
+        if w["scale"] is not None:
+            self._scale = np.asarray(w["scale"], np.float32)
+        self.dueling = w.get("dueling", self.dueling)
+        n_in = next(iter(w["params"].values())).shape[0]   # W1 is (n_in, hidden)
+        if self._net is None:
+            self._net = self._make_net(n_in)
+        for k, v in w["params"].items():
+            self._net.params[k][:] = np.asarray(v, np.float32)
+
     def act(self, obs: Observation, epsilon: float) -> str:
         if self._rng.random() < epsilon:
             return self._rng.choice(self.actions)
@@ -272,24 +302,35 @@ class DQNAgent:
         self._done_buf = np.zeros(cap, bool)
         self._prio_buf = np.zeros(cap, np.float32)
 
-    def learn(self, obs: Observation, action: str, reward: float,
-              next_obs: Observation, done: bool) -> None:
-        x, nx = self._vec(obs), self._vec(next_obs)
+    def store_vec(self, x: np.ndarray, action_idx: int, reward: float,
+                  nx: np.ndarray, done: bool) -> None:
+        """Add an already-featurized transition to the replay buffer. Used by the
+        multiprocessing trainer, whose workers featurize in their own processes."""
         self._alloc(len(x))
         i = self._pos
         self._obs_buf[i] = x
         self._nobs_buf[i] = nx
-        self._act_buf[i] = self.actions.index(action)
+        self._act_buf[i] = action_idx
         self._rew_buf[i] = reward
         self._done_buf[i] = done
         self._prio_buf[i] = self._max_prio      # new transitions get top priority
         self._pos = (i + 1) % self._cap
         self._size = min(self._size + 1, self._cap)
 
+    def learn(self, obs: Observation, action: str, reward: float,
+              next_obs: Observation, done: bool) -> None:
+        self.store_vec(self._vec(obs), self.actions.index(action),
+                       float(reward), self._vec(next_obs), bool(done))
         self._steps += 1
-        if self._size < self.warmup or self._steps % self.learn_every:
-            return
+        if self._steps % self.learn_every == 0:
+            self.train_step()
 
+    def train_step(self) -> None:
+        """One gradient update sampled from the replay buffer (no new experience).
+        Separated from `learn` so the multiprocessing learner can train at its own
+        cadence against experience its workers collected."""
+        if self._size < self.warmup:
+            return
         n, k = self._size, min(self.batch_size, self._size)
         if self.prioritized:
             scaled = self._prio_buf[:n] ** self.prio_alpha
