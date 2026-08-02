@@ -39,6 +39,10 @@ SPD_OBSERVATION_FIELDS: dict[str, str] = {
 SPD_ACTIONS: list[str] = [
     "move_n", "move_s", "move_e", "move_w",   # step toward an adjacent tile
     "attack_nearest",                          # melee the nearest visible enemy
+    # target SELECTION: melee the 2nd/3rd/4th nearest visible enemy (the same
+    # enemy1/2/3 the observation lists) — kill-priority is the agent's to learn,
+    # not hardcoded to always-nearest
+    "attack_enemy_1", "attack_enemy_2", "attack_enemy_3",
     "search",                                  # magnifying glass (find hidden things / examine)
     "pickup",                                  # step onto / grab loot on the tile
     "descend",                                 # take the down-stairs (holding the Amulet: finish)
@@ -46,6 +50,8 @@ SPD_ACTIONS: list[str] = [
     "explore",                                 # walk to the nearest unexplored area (tap the dark)
     "eat_food",                                # eat carried food
     "zap_wand",                                # cast a charged wand at the nearest visible enemy
+    # zap a CHOSEN enemy (2nd/3rd/4th visible) — focus-fire the priority target
+    "zap_enemy_1", "zap_enemy_2", "zap_enemy_3",
     # gear progression — FOUR separate decisions, never one macro, so the agent
     # (not the engine) learns the timing: spend an upgrade now vs bank six for a
     # big weapon, drink strength on find vs hold it, equip an upgrade vs a ring
