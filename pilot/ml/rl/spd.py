@@ -93,17 +93,21 @@ def spd_reward_spec() -> RewardSpec:
             RewardRule(field="hp_current", direction="down", weight=-0.05, per_unit=True),  # taking damage = bad
             RewardRule(field="level", direction="up", weight=5.0),                          # level up (kills) = good
             RewardRule(field="xp_frac", direction="up", weight=2.0, per_unit=True),         # progress to a kill/level
-            # NOTE: an `enemies_visible down` rule USED to live here ("threat removed
-            # = good"), but it was farmable and it wrecked the agent: enemies_visible
-            # counts foes in the hero's FIELD OF VIEW, so it drops every time an enemy
-            # merely leaves sight — not just when killed. A diagnostic (2026-08-03)
-            # found the greedy policy oscillating enemies_visible ~73x/episode (down
-            # then back up, enemy re-entering view), farming +1 each drop: ~99% of the
-            # eval return came from this one rule, ~8x more than actual kills. The
-            # agent loitered next to enemies flickering them in and out of sight (and
-            # died 45% of the time doing it) instead of descending. Removed: killing is
-            # already rewarded honestly via xp_frac (+2/unit) and level (+5), and
-            # evading a real threat shows up as preserved HP / avoided death.
+            # Threat removal, done HONESTLY: reward actual KILLS via the cumulative
+            # enemies_killed counter (Statistics.enemiesSlain), which only ever rises
+            # — so it cannot be farmed. This REPLACES an old `enemies_visible down`
+            # rule that fired whenever a foe left the hero's FIELD OF VIEW (not just on
+            # a kill). A diagnostic (2026-08-03) found the greedy policy oscillating
+            # enemies_visible ~73x/episode (down then up as an enemy re-entered view),
+            # farming +1 each drop — ~99% of eval return, ~8x actual kills — loitering
+            # by enemies (dying 45%) instead of descending. Removing it wholesale then
+            # over-corrected: the reward went so sparse the agent COLLAPSED to a
+            # passive wait basin (waited 40% of turns, stall_streak ~45, descended 28%)
+            # because doing nothing dodged the HP/death penalties better than sparse
+            # risky play earned. This honest kill reward restores a dense positive
+            # signal for active play — and, unlike FOV flicker, kills are finite per
+            # floor, so getting more means going DEEPER, which pulls toward descent.
+            RewardRule(field="enemies_killed", direction="up", weight=2.0, per_unit=True),
             # Descending COMPOUNDS (reaching floor d is worth ~5*d, so floor 5 far
             # outweighs floor 2 — a flat rate told the agent depth doesn't compound,
             # and it farmed floor 1 forever), but it only pays for a floor you
