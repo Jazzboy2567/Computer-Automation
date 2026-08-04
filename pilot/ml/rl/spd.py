@@ -93,7 +93,17 @@ def spd_reward_spec() -> RewardSpec:
             RewardRule(field="hp_current", direction="down", weight=-0.05, per_unit=True),  # taking damage = bad
             RewardRule(field="level", direction="up", weight=5.0),                          # level up (kills) = good
             RewardRule(field="xp_frac", direction="up", weight=2.0, per_unit=True),         # progress to a kill/level
-            RewardRule(field="enemies_visible", direction="down", weight=1.0),              # threat removed = good
+            # NOTE: an `enemies_visible down` rule USED to live here ("threat removed
+            # = good"), but it was farmable and it wrecked the agent: enemies_visible
+            # counts foes in the hero's FIELD OF VIEW, so it drops every time an enemy
+            # merely leaves sight — not just when killed. A diagnostic (2026-08-03)
+            # found the greedy policy oscillating enemies_visible ~73x/episode (down
+            # then back up, enemy re-entering view), farming +1 each drop: ~99% of the
+            # eval return came from this one rule, ~8x more than actual kills. The
+            # agent loitered next to enemies flickering them in and out of sight (and
+            # died 45% of the time doing it) instead of descending. Removed: killing is
+            # already rewarded honestly via xp_frac (+2/unit) and level (+5), and
+            # evading a real threat shows up as preserved HP / avoided death.
             # Descending COMPOUNDS (reaching floor d is worth ~5*d, so floor 5 far
             # outweighs floor 2 — a flat rate told the agent depth doesn't compound,
             # and it farmed floor 1 forever), but it only pays for a floor you

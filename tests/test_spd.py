@@ -28,8 +28,12 @@ def test_reward_encodes_good_and_bad():
     assert spec.compute(base, obs(level=2), False, {}) > 4
     # descending is good
     assert spec.compute(base, obs(depth=2), False, {}) > 0
-    # removing a threat is good
-    assert spec.compute(base, obs(enemies_visible=0), False, {}) > 0
+    # progress toward a kill (xp gain) is good. NOTE: enemies leaving the hero's
+    # VIEW is deliberately NOT rewarded — that rule was farmable (an enemy simply
+    # walking out of sight paid like a kill), so killing is credited via xp/level
+    # instead. See the removal note in spd_reward_spec.
+    assert spec.compute(base, obs(xp_frac=0.3), False, {}) > 0
+    assert spec.compute(base, obs(enemies_visible=0), False, {}) == 0
     # gaining an item is good
     assert spec.compute(base, obs(inventory_count=6), False, {}) > 0
     # death is the worst single event — asserted RELATIVE to the other events
@@ -38,5 +42,5 @@ def test_reward_encodes_good_and_bad():
     # optimal) can't silently make death cheap
     death = spec.compute(obs(hp_current=5), obs(hp_current=0), True, {})
     assert death < 0
-    for good in (obs(level=2), obs(depth=2), obs(enemies_visible=0), obs(inventory_count=6)):
+    for good in (obs(level=2), obs(depth=2), obs(xp_frac=0.3), obs(inventory_count=6)):
         assert death < -spec.compute(base, good, False, {})
