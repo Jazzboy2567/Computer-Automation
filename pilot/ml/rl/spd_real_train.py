@@ -231,16 +231,45 @@ def run_continuous(
 
     done_eps, k = 0, 0
     best_score = None                                 # (avg_depth, avg_return) high-water mark
+    env_restarts, consecutive_crashes = 0, 0
     try:
         while True:
             k += 1
             e0, e1 = eps_at(done_eps), eps_at(done_eps + interval)
-            curve = train(train_env, agent, train_reward, interval, featurizer=feat,
-                          epsilon_start=e0, epsilon_final=e1)
+            try:
+                curve = train(train_env, agent, train_reward, interval, featurizer=feat,
+                              epsilon_start=e0, epsilon_final=e1)
+                eval_env.episode = 0                  # replay the same eval dungeons
+                rt, st, dt = _evaluate(eval_env, agent.policy, reward, eval_episodes, feat=feat)
+            except RuntimeError as e:
+                # The headless bridge is a JVM and can die mid-episode — a native/OOM
+                # crash (no Python-catchable stack) or un-soaked deep content. For an
+                # unattended run that must NEVER be true: rebuild the env(s) and carry
+                # on. The agent — replay buffer, weights, optimizer — outlives the env,
+                # so only the in-flight interval is lost, not the run. A fresh training
+                # seed each restart avoids re-triggering a seed-specific crash; if it
+                # crashes 8 intervals running, something is truly broken, so abort
+                # rather than spin. This is what lets a deep-diving agent (which reaches
+                # the least-soaked content, exactly where crashes hide) keep training.
+                env_restarts += 1
+                consecutive_crashes += 1
+                print(f"[interval {k}] EnvServer died ({e!r}); restarting envs "
+                      f"(restart #{env_restarts}) and continuing", flush=True)
+                for ev in (train_env, eval_env):
+                    try:
+                        ev.close()
+                    except Exception:
+                        pass
+                if consecutive_crashes >= 8:
+                    print("[continuous] 8 consecutive env crashes — aborting to avoid a spin loop", flush=True)
+                    break
+                train_env = SPDRealEnv(seed=seed + 100_000 * env_restarts, curriculum=curriculum, **kw)
+                eval_env = SPDRealEnv(seed=_EVAL_SEED, **kw)
+                eval_env.best_depth, eval_env.best_gear = 0, ""
+                k -= 1                                # this interval didn't complete
+                continue
+            consecutive_crashes = 0
             done_eps += interval
-
-            eval_env.episode = 0                      # replay the same eval dungeons
-            rt, st, dt = _evaluate(eval_env, agent.policy, reward, eval_episodes, feat=feat)
 
             joblib.dump(agent.Q, ws.model_dir / "policy.joblib")   # latest, always
             # keep the best-so-far separately, so a long run that later drifts or
@@ -266,5 +295,8 @@ def run_continuous(
                 except Exception as e:
                     print(f"[interval {k}] report failed (continuing): {e!r}", flush=True)
     finally:
-        train_env.close()
-        eval_env.close()
+        for ev in (train_env, eval_env):
+            try:
+                ev.close()
+            except Exception:
+                pass
