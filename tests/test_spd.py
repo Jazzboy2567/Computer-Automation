@@ -8,14 +8,22 @@ from pilot.ml.rl.spd import SPD_ACTIONS, SPD_OBSERVATION_FIELDS, spd_reward_spec
 def test_schema_present():
     assert "hp_current" in SPD_OBSERVATION_FIELDS
     assert "enemies_visible" in SPD_OBSERVATION_FIELDS
+    # the honest kill reward reads this field — if it's ever dropped/renamed the
+    # rule silently returns 0 (the passive-collapse failure mode), so assert it
+    assert "enemies_killed" in SPD_OBSERVATION_FIELDS
     assert "attack_nearest" in SPD_ACTIONS and "descend" in SPD_ACTIONS
+    # target-selection actions must exist AND stay index-aligned with the bridge's
+    # enemy0..3 order; a drop/rename here surfaces only as silently wrong targeting
+    for a in ("attack_enemy_1", "attack_enemy_2", "attack_enemy_3",
+              "zap_enemy_1", "zap_enemy_2", "zap_enemy_3"):
+        assert a in SPD_ACTIONS
 
 
 def test_reward_encodes_good_and_bad():
     spec = spd_reward_spec()
 
     base = {"hp_current": 20, "level": 1, "xp_frac": 0.0, "enemies_visible": 1,
-            "depth": 1, "gold": 0, "inventory_count": 5}
+            "enemies_killed": 0, "depth": 1, "gold": 0, "inventory_count": 5}
 
     def obs(**changes):
         o = dict(base)
@@ -34,6 +42,10 @@ def test_reward_encodes_good_and_bad():
     # instead. See the removal note in spd_reward_spec.
     assert spec.compute(base, obs(xp_frac=0.3), False, {}) > 0
     assert spec.compute(base, obs(enemies_visible=0), False, {}) == 0
+    # killing an enemy IS rewarded, via the honest cumulative counter (this is the
+    # rule that replaced enemies_visible; without this assertion a field-name typo
+    # would zero the rule and every other test would still pass)
+    assert spec.compute(base, obs(enemies_killed=1), False, {}) > 0
     # gaining an item is good
     assert spec.compute(base, obs(inventory_count=6), False, {}) > 0
     # death is the worst single event — asserted RELATIVE to the other events

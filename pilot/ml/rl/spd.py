@@ -28,6 +28,7 @@ SPD_OBSERVATION_FIELDS: dict[str, str] = {
     "depth": "current dungeon floor (reliable: 'descend to floor N' / depth indicator)",
     "gold": "gold held, inventory header (reliable: fixed-position number)",
     "enemies_visible": "count from the top-right 'N + skull' badge (reliable when present, else 0)",
+    "enemies_killed": "cumulative kills this run (bridge: Statistics.enemiesSlain; monotonic, un-farmable) — the honest kill reward reads this",
     "inventory_count": "number of occupied inventory slots (moderate: count non-empty slots)",
     "starving": "1 if starving (no passive regen), else 0 (needs the hunger/buff icon or examine)",
     "has_ankh": "1 if an Ankh is held (revive item) (moderate: detect inventory item)",
@@ -105,8 +106,13 @@ def spd_reward_spec() -> RewardSpec:
             # passive wait basin (waited 40% of turns, stall_streak ~45, descended 28%)
             # because doing nothing dodged the HP/death penalties better than sparse
             # risky play earned. This honest kill reward restores a dense positive
-            # signal for active play — and, unlike FOV flicker, kills are finite per
-            # floor, so getting more means going DEEPER, which pulls toward descent.
+            # signal for active play. It does NOT itself create descent pressure —
+            # it pays for kills wherever they happen and gives no gradient toward the
+            # stairs; descent pressure comes from the compounding depth term below and
+            # the stall clock. (An earlier note here claimed kills "pull toward descent"
+            # because a floor's foes are finite — that conflates "the floor runs out of
+            # enemies" with a signal to descend, which it has none of. Stated honestly
+            # to avoid the false-proxy thinking that produced the FOV rule.)
             RewardRule(field="enemies_killed", direction="up", weight=2.0, per_unit=True),
             # Descending COMPOUNDS (reaching floor d is worth ~5*d, so floor 5 far
             # outweighs floor 2 — a flat rate told the agent depth doesn't compound,

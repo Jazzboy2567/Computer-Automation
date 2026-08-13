@@ -71,6 +71,7 @@ class SPDGridEnv(GameEnv):
         self.hp_max = 20
         self.hp = 20
         self.gold = 0
+        self.kills = 0            # cumulative kills, mirrors the real bridge's enemies_killed
         self.heals = 2
         self.items = 1            # non-heal items; inventory_count = heals + items
         self.hunger = 0
@@ -81,7 +82,7 @@ class SPDGridEnv(GameEnv):
     # ---------------------------------------------------------------- obs
     def observation_fields(self) -> list[str]:
         return ["hp_current", "hp_max", "hp_frac", "level", "xp_frac", "depth",
-                "gold", "enemies_visible", "inventory_count", "starving"]
+                "gold", "enemies_visible", "enemies_killed", "inventory_count", "starving"]
 
     def _nearest_enemy(self):
         if not self.enemies:
@@ -111,6 +112,7 @@ class SPDGridEnv(GameEnv):
             "depth": float(self.depth),
             "gold": float(self.gold),
             "enemies_visible": float(min(3, len(self.enemies))),
+            "enemies_killed": float(self.kills),
             "inventory_count": float(self.heals + self.items),
             "starving": starving,
             # compact decision cues (used by the agent's featurizer)
@@ -153,6 +155,7 @@ class SPDGridEnv(GameEnv):
                     enemy[2] -= 3 + self.level  # attack
                     if enemy[2] <= 0:
                         self.enemies.remove(enemy)
+                        self.kills += 1
                         self.xp += 4
                         self.gold += self._rng.randint(0, 3)
                         self._level_up_check()
