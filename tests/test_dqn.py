@@ -92,16 +92,20 @@ def test_train_parallel_learns_and_counts_episodes():
 
     envs = [SPDGridEnv(seed=s, max_steps=40) for s in range(4)]
     agent = DQNAgent(envs[0].action_space, seed=0, warmup=50)
-    curve = train_parallel(agent, envs, spd_reward_spec(), episodes=400,
+    # 800 eps (not 400): train_parallel is THREADED, so gradient-step ordering is
+    # nondeterministic and load-sensitive; a wider trained-vs-random margin keeps
+    # the assertions robust under full-suite load (a narrow margin flaked ~50%).
+    curve = train_parallel(agent, envs, spd_reward_spec(), episodes=800,
                            featurizer=spd_featurizer, epsilon_start=1.0, epsilon_final=0.1)
-    assert sum(len(c) for c in [curve]) and len(curve) >= 15   # ~20 blocks over 400 eps
+    assert sum(len(c) for c in [curve]) and len(curve) >= 15   # ~20 blocks over 800 eps
     assert curve[-1] > curve[0]                                # learning progressed
 
     import random
     ev = SPDGridEnv(seed=999, max_steps=40)
-    trained, _ = evaluate(ev, agent.policy, spd_reward_spec(), 30, featurizer=spd_featurizer)
+    # 60 eval eps (not 30) to shrink the estimate variance on both sides
+    trained, _ = evaluate(ev, agent.policy, spd_reward_spec(), 60, featurizer=spd_featurizer)
     rng = random.Random(1)
-    rand, _ = evaluate(ev, lambda o: rng.choice(ev.action_space), spd_reward_spec(), 30)
+    rand, _ = evaluate(ev, lambda o: rng.choice(ev.action_space), spd_reward_spec(), 60)
     assert trained > rand                                      # beats random
 
 
