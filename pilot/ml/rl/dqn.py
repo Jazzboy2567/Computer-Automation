@@ -151,9 +151,23 @@ class DQNAgent:
                  warmup: int = 500, learn_every: int = 4, sync_every: int = 1000,
                  prioritized: bool = False, prio_alpha: float = 0.6,
                  prio_beta: float = 0.4, prio_eps: float = 1e-3,
-                 dueling: bool = False):
+                 dueling: bool = False, backend: str = "numpy"):
         self.actions = list(actions)
         self.dueling = dueling
+        # Backend for the net's math. "numpy" (default) is the dependency-free
+        # pure-NumPy path. "torch" runs the batch gradient step on the GPU via
+        # torch_net.TorchNet — same architecture, weights interoperate (snapshots
+        # stay in the {W,b} numpy layout), so a GPU-trained policy still loads and
+        # evaluates on the NumPy path. "auto" picks torch+cuda if available.
+        self._seed = seed
+        if backend == "auto":
+            try:
+                from .torch_net import cuda_available
+                backend = "torch" if cuda_available() else "numpy"
+            except Exception:
+                backend = "numpy"
+        self.backend = backend
+        self._torch = backend == "torch"
         self.gamma = gamma
         self.lr = lr
         self.batch_size = batch_size
@@ -288,6 +302,10 @@ class DQNAgent:
         return self.actions[int(np.argmax(q[0]))]
 
     def _make_net(self, n_in: int):
+        if self._torch:
+            from .torch_net import TorchNet
+            return TorchNet(n_in, len(self.actions), self._hidden, self.dueling,
+                            lr=self.lr, seed=self._seed)
         cls = _DuelingMLP if self.dueling else _MLP
         return cls(n_in, len(self.actions), self._hidden, self._nprng)
 
@@ -350,22 +368,28 @@ class DQNAgent:
         # overestimates action values, which here let the policy collapse onto a
         # single over-valued action (throw_item ~ a safe no-op) and stop
         # descending. Decoupling selection from evaluation curbs that.
-        next_acts = self._net.forward(nxts)[0].argmax(1)
-        q_next, _ = self._target.forward(nxts)
-        q_next_sel = q_next[np.arange(k), next_acts]
-        targets = rews + np.where(dones, 0.0, self.gamma * q_next_sel)
+        if self._torch:
+            # the whole batched update runs on the GPU in one round-trip; returns
+            # td_raw (numpy) so priority bookkeeping below is backend-agnostic
+            td_raw = self._net.train_double_dqn(xs, acts, rews, nxts, dones,
+                                                weights, self.gamma, self._target)
+        else:
+            next_acts = self._net.forward(nxts)[0].argmax(1)
+            q_next, _ = self._target.forward(nxts)
+            q_next_sel = q_next[np.arange(k), next_acts]
+            targets = rews + np.where(dones, 0.0, self.gamma * q_next_sel)
 
-        q, cache = self._net.forward(xs)
-        ar = np.arange(k)
-        td_raw = q[ar, acts] - targets
-        # the fresh |TD error| becomes each transition's new priority
+            q, cache = self._net.forward(xs)
+            ar = np.arange(k)
+            td_raw = q[ar, acts] - targets
+            dq = np.zeros_like(q)
+            # clipped TD error (Huber-style gradient) x IS weight, for stability
+            dq[ar, acts] = (np.clip(td_raw, -1.0, 1.0) * weights) / k
+            self._net.backward_step(cache, dq, self.lr)
+
+        # the fresh |TD error| becomes each transition's new priority (both backends)
         self._prio_buf[idx] = np.abs(td_raw) + self.prio_eps
         self._max_prio = max(self._max_prio, float(self._prio_buf[idx].max()))
-
-        dq = np.zeros_like(q)
-        # clipped TD error (Huber-style gradient) x IS weight, for stability
-        dq[ar, acts] = (np.clip(td_raw, -1.0, 1.0) * weights) / k
-        self._net.backward_step(cache, dq, self.lr)
 
         self._updates += 1
         if self._updates % self.sync_every == 0:

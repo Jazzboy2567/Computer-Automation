@@ -109,14 +109,22 @@ def make_agent(kind: str, actions: list[str], seed: int = 0):
     """'table' = tabular Q over the compact featurizer; 'dqn' = neural net over
     the FULL observation (featurizer identity). Returns (agent, featurizer)."""
     if kind == "dqn":
+        import os
+
         from .dqn import DQNAgent
-        # hidden=128 over the ~104-feature focused encoding. Dueling (available via
-        # dueling=True) and a 256-wide trunk were tried for the combat ceiling and
-        # came out neutral-to-worse AND much slower per step — with the geared
-        # curriculum's now-survivable (longer) episodes that made an interval take
-        # hours. This is the proven-fast config; the featurizer passes the focused
-        # scalars through (and unpacks the dense map iff it's enabled).
-        return DQNAgent(actions, seed=seed, hidden=128), spd_map_featurizer
+        # hidden=128 over the ~104-feature focused encoding was the proven-fast CPU
+        # config (a 256-wide trunk was much slower per step on CPU). But a batch-64
+        # gradient step through this tiny net is TOO SMALL for the GPU to help
+        # (measured 0.5x — kernel-launch/transfer overhead > the matmul). The GPU
+        # only pays off with a BIGGER net: hidden=512 is ~36x slower than hidden=128
+        # on CPU but the SAME wall-clock on the GPU (17x speedup at batch 64) — i.e.
+        # the GPU unlocks a higher-capacity net for free, which the hard long-horizon
+        # gear/exploration problem plausibly needs. So backend + width are env-tunable:
+        #   PILOT_DQN_BACKEND=torch  PILOT_DQN_HIDDEN=512   (run under .venv-gpu)
+        # Defaults keep the dependency-free CPU path (numpy, hidden 128) unchanged.
+        backend = os.environ.get("PILOT_DQN_BACKEND", "numpy")
+        hidden = int(os.environ.get("PILOT_DQN_HIDDEN", "128"))
+        return DQNAgent(actions, seed=seed, hidden=hidden, backend=backend), spd_map_featurizer
     return QLearningAgent(actions, seed=seed), spd_featurizer
 
 
