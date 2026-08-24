@@ -217,5 +217,18 @@ def spd_training_reward() -> RewardSpec:
         # The agent still learns WHICH gear and WHEN; this only makes trying it on
         # worth the detour now that stalling earns nothing.
         RewardRule(field="gear_score", direction="up", weight=1.5, per_unit=True, max_depth=10),
+        # Reward raising STRENGTH. A diagnostic (2026-08-23) found the agent never
+        # completes the gear-up chain even when handed the materials: it drinks a
+        # Potion of Strength only sporadically and NEVER equips (equip_gear=0),
+        # because drinking strength has no immediate payoff — STR itself wasn't
+        # rewarded, so "drink -> drink -> THEN equip tier-2" is a delayed multi-step
+        # reward whose first steps look like wasted turns. STR is pure upside and
+        # monotonic (you can't lose it barring a cursed Ring of Might the agent
+        # chose to wear; strength potions are finite), so rewarding its rise is
+        # safe and un-farmable — like known_item_types. This makes the FIRST step of
+        # the STR-unlock -> equip-tier2 chain rewarding so the whole chain becomes
+        # learnable; equipping still pays via gear_score, so the agent learns the
+        # sequence rather than being scripted into it.
+        RewardRule(field="str", direction="up", weight=2.0, per_unit=True),
     ]
     return base.model_copy(update={"rules": base.rules + shaping})
