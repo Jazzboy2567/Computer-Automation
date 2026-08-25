@@ -230,6 +230,17 @@ def spd_training_reward() -> RewardSpec:
         # learnable; equipping still pays via gear_score, so the agent learns the
         # sequence rather than being scripted into it.
         RewardRule(field="str", direction="up", weight=2.0, per_unit=True),
+        # POTENTIAL-BASED HP shaping (un-farmable, same shape as the stairs pair
+        # above). The death-cause graph (2026-08-25) showed the agent lives
+        # perpetually wounded (~60-70% HP) and dies to attrition — it never rests
+        # to a safe buffer because regaining HP paid nothing, so topping up looked
+        # like wasted turns. Reward hp_frac rising and cost it falling, SYMMETRICALLY:
+        # any damage-then-heal loop telescopes to zero (no farm — hp_frac is capped
+        # at 1), but staying wounded forgoes reward the agent could bank by healing.
+        # It learns "recover a buffer, then engage" without changing what's optimal
+        # (potential-based shaping is policy-invariant). Training-only; eval clean.
+        RewardRule(field="hp_frac", direction="up", weight=2.0, per_unit=True),
+        RewardRule(field="hp_frac", direction="down", weight=-2.0, per_unit=True),
     ]
     # Per-turn cost for being SURROUNDED (2+ enemies adjacent). A death-cause graph
     # (2026-08-25) showed the agent lives perpetually wounded and dies to melee
