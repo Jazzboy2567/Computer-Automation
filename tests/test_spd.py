@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from pilot.ml.rl.spd import SPD_ACTIONS, SPD_OBSERVATION_FIELDS, spd_reward_spec
+from pilot.ml.rl.spd import (
+    SPD_ACTIONS,
+    SPD_OBSERVATION_FIELDS,
+    spd_reward_spec,
+    spd_training_reward,
+)
 
 
 def test_schema_present():
@@ -56,3 +61,20 @@ def test_reward_encodes_good_and_bad():
     assert death < 0
     for good in (obs(level=2), obs(depth=2), obs(xp_frac=0.3), obs(inventory_count=6)):
         assert death < -spec.compute(base, good, False, {})
+
+
+def test_surrounded_penalty_is_training_only():
+    train = spd_training_reward()
+    ev = spd_reward_spec()
+    base = {"hp_current": 20, "level": 1, "xp_frac": 0.0, "depth": 1,
+            "gold": 0, "inventory_count": 5, "str": 10}
+
+    def surr(v):
+        o = dict(base)
+        o["surrounded"] = v
+        return o
+
+    # training charges a per-turn cost for being surrounded (2+ adjacent)...
+    assert train.compute(base, surr(1.0), False, {}) < train.compute(base, surr(0.0), False, {})
+    # ...but the eval spec is a clean measure and never sees it
+    assert ev.compute(base, surr(1.0), False, {}) == ev.compute(base, surr(0.0), False, {})

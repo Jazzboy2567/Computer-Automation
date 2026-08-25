@@ -140,6 +140,12 @@ class SPDRealEnv(GameEnv):
         # how close to death, 0 at full health .. ~1 near death — lets a reward
         # penalise HP loss convexly (costs more the lower you already are)
         obs["hp_missing_frac"] = max(0.0, 1.0 - obs.get("hp_frac", 1.0))
+        # surrounded = 2+ enemies adjacent. A death-cause diagnostic found 40% of
+        # deaths happen while surrounded (1v2+ is a death sentence), so a reward can
+        # charge a per-turn cost for it — teaching the agent to position (back into a
+        # corridor so only one foe can reach it) using the walkable-ring it already
+        # sees. Derived here so it needs no bridge change; the agent learns HOW.
+        obs["surrounded"] = 1.0 if obs.get("enemies_adjacent", 0.0) >= 2.0 else 0.0
         return obs
 
     # ------------------------------------------------------------- GameEnv
