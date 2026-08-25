@@ -231,4 +231,12 @@ def spd_training_reward() -> RewardSpec:
         # sequence rather than being scripted into it.
         RewardRule(field="str", direction="up", weight=2.0, per_unit=True),
     ]
-    return base.model_copy(update={"rules": base.rules + shaping})
+    # Per-turn cost for being SURROUNDED (2+ enemies adjacent). A death-cause graph
+    # (2026-08-25) showed the agent lives perpetually wounded and dies to melee
+    # attrition — 40% of deaths while surrounded — not to starvation or DoT. This
+    # charges a small cost each turn it lets itself be flanked, teaching it to fight
+    # from a chokepoint (it already sees the walkable ring) instead of in the open.
+    # A STATE penalty, not a scripted retreat: the agent learns HOW to un-flank. Kept
+    # modest so a genuinely worthwhile 1v2 (a finishing blow) can still be chosen.
+    flags = {**base.flag_penalties, "surrounded": -0.15}
+    return base.model_copy(update={"rules": base.rules + shaping, "flag_penalties": flags})
