@@ -296,6 +296,69 @@ def test_close_sends_quit():
     assert proc.commands[-1] == "quit"
 
 
+class _StubEnv:
+    """Minimal GameEnv stand-in: each episode replays a scripted list of
+    (obs, done, info) steps, so _evaluate's win-rate math can be asserted with no
+    JVM. reset() returns a floor-1 obs; step() walks the current episode's script."""
+
+    def __init__(self, episodes):
+        self._eps = list(episodes)
+        self._i = -1
+
+    def reset(self):
+        self._i += 1
+        self._j = 0
+        return {"depth": 1.0, "hp_current": 20.0}
+
+    def step(self, action):
+        obs, done, info = self._eps[self._i][self._j]
+        self._j += 1
+        return obs, done, info
+
+
+def _scripted_episode(depths):
+    """A run that visits each depth in `depths`; the last step is terminal."""
+    steps = []
+    for j, d in enumerate(depths):
+        obs = {"depth": float(d), "hp_current": 20.0}
+        steps.append((obs, j == len(depths) - 1, {"depth": float(d)}))
+    return steps
+
+
+def test_evaluate_reports_reach_and_beat_goo_rates():
+    # reach-Goo = reached floor 5; beat-Goo = reached floor 6 (only by killing Goo)
+    from pilot.ml.rl.spd import spd_reward_spec
+    from pilot.ml.rl.spd_real_train import _evaluate
+
+    env = _StubEnv([
+        _scripted_episode([2, 4, 6]),   # beat Goo (floor 6)
+        _scripted_episode([2, 5]),      # reached Goo, did not beat it
+        _scripted_episode([2, 3]),      # never reached Goo
+    ])
+    _, _, depth, reach, beat = _evaluate(
+        env, lambda o: "wait", spd_reward_spec(), 3, feat=lambda o: o)
+    assert reach == pytest.approx(2 / 3)   # two of three runs reached floor 5
+    assert beat == pytest.approx(1 / 3)    # one of three got past it
+    assert depth == pytest.approx((6 + 5 + 3) / 3)
+
+
+def test_depth_curriculum_weights_toward_the_boss_floor():
+    # the hard, rarely-reached content (Goo on floor 5) must get MORE practice
+    # starts than the shallow floors the agent already reaches on its own
+    from collections import Counter
+
+    from pilot.ml.rl.spd_real_train import depth_curriculum
+
+    cur = depth_curriculum(max_depth=5, seed=0)
+    picks = [cur(e) for e in range(4000)]
+    deep = [p for p in picks if p > 1]
+    counts = Counter(deep)
+    assert counts[5] > counts[2]                 # boss floor out-sampled the shallow one
+    assert counts[5] > counts[3] and counts[4] > counts[2]   # monotone-ish with depth
+    assert picks.count(1) > len(deep)            # floor 1 (the real task) still dominates
+    assert min(picks) == 1 and max(picks) == 5   # stays within [1, max_depth]
+
+
 def test_server_error_raises():
     proc = FakeProc(['{"error":"NullPointerException"}\n'])
     env = SPDRealEnv(proc=proc)
