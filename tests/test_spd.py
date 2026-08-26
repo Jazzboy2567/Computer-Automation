@@ -80,15 +80,3 @@ def test_surrounded_penalty_is_training_only():
     assert ev.compute(base, surr(1.0), False, {}) == ev.compute(base, surr(0.0), False, {})
 
 
-def test_hp_buffer_shaping_training_only():
-    train = spd_training_reward()
-    ev = spd_reward_spec()
-    base = {"hp_current": 15, "hp_frac": 0.6, "level": 1, "xp_frac": 0.0,
-            "depth": 1, "gold": 0, "inventory_count": 5, "str": 10}
-    heal = dict(base)
-    heal["hp_frac"], heal["hp_current"] = 0.8, 20   # regained a buffer
-
-    # training rewards recovering HP (so the agent tops up instead of fighting wounded)
-    assert train.compute(base, heal, False, {}) > 0
-    # the eval objective does not reward healing — it stays a clean measure
-    assert ev.compute(base, heal, False, {}) == 0

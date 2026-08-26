@@ -230,17 +230,15 @@ def spd_training_reward() -> RewardSpec:
         # learnable; equipping still pays via gear_score, so the agent learns the
         # sequence rather than being scripted into it.
         RewardRule(field="str", direction="up", weight=2.0, per_unit=True),
-        # POTENTIAL-BASED HP shaping (un-farmable, same shape as the stairs pair
-        # above). The death-cause graph (2026-08-25) showed the agent lives
-        # perpetually wounded (~60-70% HP) and dies to attrition — it never rests
-        # to a safe buffer because regaining HP paid nothing, so topping up looked
-        # like wasted turns. Reward hp_frac rising and cost it falling, SYMMETRICALLY:
-        # any damage-then-heal loop telescopes to zero (no farm — hp_frac is capped
-        # at 1), but staying wounded forgoes reward the agent could bank by healing.
-        # It learns "recover a buffer, then engage" without changing what's optimal
-        # (potential-based shaping is policy-invariant). Training-only; eval clean.
-        RewardRule(field="hp_frac", direction="up", weight=2.0, per_unit=True),
-        RewardRule(field="hp_frac", direction="down", weight=-2.0, per_unit=True),
+        # NOTE: a potential-based hp_frac shaping pair (reward healing, cost damage,
+        # symmetrically) was tried here (2026-08-25) to stop the agent fighting
+        # wounded — and did NOTHING: the death-diagnostic mean HP baseline stayed
+        # ~13-15 and the death rate held at ~80%. Root cause: the agent has no
+        # efficient way to heal early (slow passive regen, no potions), so it CAN'T
+        # maintain a buffer no matter the incentive — it runs wounded because it is
+        # UNDER-GEARED (takes damage faster than it can recover), not by choice.
+        # Reverted. "Runs wounded" and "gets surrounded" are symptoms of the
+        # materials wall, not independent, shapeable causes.
     ]
     # Per-turn cost for being SURROUNDED (2+ enemies adjacent). A death-cause graph
     # (2026-08-25) showed the agent lives perpetually wounded and dies to melee
