@@ -30,10 +30,24 @@ def _emit(cb: Optional[EventCb], **event: Any) -> None:
         cb(event)
 
 
+# Floor of the first boss (Goo, end of the Sewers). Reaching it = surviving the
+# floor-1..4 journey; getting PAST it (floor 6) is only possible by killing Goo —
+# so these two floors define the "reach Goo / beat Goo" success the training targets.
+GOO_DEPTH = 5
+
+
 def _evaluate(env: SPDRealEnv, policy, reward: RewardSpec, episodes: int,
-              feat=spd_featurizer) -> tuple[float, float, float]:
-    """Return (mean return, mean survived steps, mean deepest floor)."""
+              feat=spd_featurizer) -> tuple[float, float, float, float, float]:
+    """Return (mean return, mean survived steps, mean deepest floor, reach-Goo
+    rate, beat-Goo rate) over `episodes` real floor-1 runs.
+
+    reach-Goo = fraction of runs that get to floor 5 (Goo's floor); beat-Goo =
+    fraction that reach floor 6, which is only reachable by killing Goo. These are
+    the *repeatable* success measures the agent is being trained for — we want most
+    runs, not just the best one, to reach and then beat the first boss.
+    """
     rets, survs, depths = [], [], []
+    reached_goo = beat_goo = 0
     for _ in range(episodes):
         obs = env.reset()
         done, total, steps, deepest = False, 0.0, 0, 1
@@ -47,7 +61,10 @@ def _evaluate(env: SPDRealEnv, policy, reward: RewardSpec, episodes: int,
         rets.append(total)
         survs.append(steps)
         depths.append(deepest)
-    return mean(rets), mean(survs), mean(depths)
+        reached_goo += int(deepest >= GOO_DEPTH)
+        beat_goo += int(deepest >= GOO_DEPTH + 1)
+    n = max(1, episodes)
+    return mean(rets), mean(survs), mean(depths), reached_goo / n, beat_goo / n
 
 
 def _report(result: RLResult, reward: RewardSpec) -> str:
@@ -78,19 +95,31 @@ def _report(result: RLResult, reward: RewardSpec) -> str:
     ]) + "\n"
 
 
-def depth_curriculum(max_depth: int = 4, prob: float = 0.35, seed: int = 0):
-    """A fraction of training episodes start on a deeper floor (2..max_depth).
+def depth_curriculum(max_depth: int = 4, prob: float = 0.4, seed: int = 0):
+    """A fraction of training episodes start on a deeper floor (2..max_depth),
+    weighted TOWARD the deepest floors.
 
     Breaks the loop where an agent that always dies on floor 2 never experiences
     the floors where gear, talents and boss tactics matter — so it can never
     learn that they matter. Only the episode's STARTING FLOOR changes; how to
     play from there is entirely the agent's to learn. Most episodes still start
     on floor 1 so the real task stays dominant, and evaluation never uses this.
+
+    The deep starts are weighted so the DEEPEST floor (e.g. floor 5, Goo) and its
+    run-up get the most repetitions: the shallow floors the agent already reaches
+    on its own, whereas the hard, rarely-reached content — the boss fight — is
+    exactly what needs concentrated practice to become learnable. Sampling
+    probability rises linearly with depth (floor 2 : floor 5 = 1 : 4). Nothing
+    about the Goo fight is scripted; only how often the agent is dropped into it.
     """
     rng = random.Random(seed)
+    floors = list(range(2, max(2, max_depth) + 1))
+    weights = [float(f - 1) for f in floors]          # deeper = more reps
 
     def pick(episode: int) -> int:
-        return rng.randint(2, max_depth) if rng.random() < prob else 1
+        if not floors or rng.random() >= prob:
+            return 1
+        return rng.choices(floors, weights=weights)[0]
 
     return pick
 
@@ -165,13 +194,13 @@ def run_spd_real_training(
         best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
 
     with SPDRealEnv(seed=_EVAL_SEED, **kw) as env:
-        rt, st, dt = _evaluate(env, agent.policy, reward, eval_episodes, feat=feat)
+        rt, st, dt, reach5, beat5 = _evaluate(env, agent.policy, reward, eval_episodes, feat=feat)
         if getattr(env, "best_depth", 0) > best_depth:
             best_depth, best_gear = getattr(env, "best_depth", 0), getattr(env, "best_gear", "")
     rng = random.Random(7)
     with SPDRealEnv(seed=_EVAL_SEED, **kw) as env:
-        rr, sr, dr = _evaluate(env, lambda o: rng.choice(SPDRealEnv.action_space),
-                               reward, eval_episodes)
+        rr, sr, dr, _, _ = _evaluate(env, lambda o: rng.choice(SPDRealEnv.action_space),
+                                     reward, eval_episodes)
 
     model_path = ws.model_dir / "policy.joblib"
     joblib.dump(agent.Q, model_path)
@@ -190,7 +219,8 @@ def run_spd_real_training(
     ws.write_text("report.md", _report(result, reward))
     _emit(on_event, event="result", trained=result.avg_return_trained,
           random=result.avg_return_random, improvement=result.improvement,
-          depth_trained=result.avg_depth_trained, depth_random=result.avg_depth_random)
+          depth_trained=result.avg_depth_trained, depth_random=result.avg_depth_random,
+          reach_goo=round(reach5, 2), beat_goo=round(beat5, 2))
     return result, ws
 
 
@@ -233,8 +263,8 @@ def run_continuous(
     eval_env = SPDRealEnv(seed=_EVAL_SEED, **kw)
     # random baseline is constant — measure it once
     rng = random.Random(7)
-    rr, sr, dr = _evaluate(eval_env, lambda o: rng.choice(SPDRealEnv.action_space),
-                           reward, eval_episodes)
+    rr, sr, dr, _, _ = _evaluate(eval_env, lambda o: rng.choice(SPDRealEnv.action_space),
+                                 reward, eval_episodes)
     eval_env.best_depth, eval_env.best_gear = 0, ""   # don't credit random's floors
 
     done_eps, k = 0, 0
@@ -248,7 +278,8 @@ def run_continuous(
                 curve = train(train_env, agent, train_reward, interval, featurizer=feat,
                               epsilon_start=e0, epsilon_final=e1)
                 eval_env.episode = 0                  # replay the same eval dungeons
-                rt, st, dt = _evaluate(eval_env, agent.policy, reward, eval_episodes, feat=feat)
+                rt, st, dt, reach5, beat5 = _evaluate(
+                    eval_env, agent.policy, reward, eval_episodes, feat=feat)
             except RuntimeError as e:
                 # The headless bridge is a JVM and can die mid-episode — a native/OOM
                 # crash (no Python-catchable stack) or un-soaked deep content. For an
@@ -282,9 +313,14 @@ def run_continuous(
             joblib.dump(agent.Q, ws.model_dir / "policy.joblib")   # latest, always
             # keep the best-so-far separately, so a long run that later drifts or
             # destabilises never loses its high point (depth first, then return)
+            # Rank the high-water mark by the OBJECTIVE, not raw depth: most-often
+            # beats Goo, then most-often reaches it, then average depth, then return.
+            # A policy that reaches floor 6 half the time beats one that averages a
+            # deeper floor but never actually kills the boss.
             new_best = ""
-            if best_score is None or (dt, rt) > best_score:
-                best_score = (dt, rt)
+            score = (beat5, reach5, dt, rt)
+            if best_score is None or score > best_score:
+                best_score = score
                 joblib.dump(agent.Q, ws.model_dir / "policy_best.joblib")
                 new_best = "  <== new best"
 
@@ -292,6 +328,9 @@ def run_continuous(
                 "interval": k, "total_eps": done_eps, "eps": round(e1, 3),
                 "return": round(rt, 2), "return_random": round(rr, 2),
                 "depth": round(dt, 2), "survival": round(st, 1),
+                # the repeatable-success metrics: what fraction of eval runs reach
+                # the Goo floor, and what fraction get past it (i.e. beat Goo)
+                "reach_goo": round(reach5, 2), "beat_goo": round(beat5, 2),
                 "best_depth": eval_env.best_depth, "best_gear": eval_env.best_gear,
                 "curve_start": curve[0], "curve_end": curve[-1],
                 "new_best": new_best, "workspace": str(ws.path),

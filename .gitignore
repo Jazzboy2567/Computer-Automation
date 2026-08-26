@@ -40,3 +40,7 @@ playwright-report/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# --- SPD training run logs (scratch, never committed) ---
+spd_*.log
+spd_*.err
