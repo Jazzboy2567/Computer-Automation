@@ -17,6 +17,9 @@ def test_schema_present():
     # rule silently returns 0 (the passive-collapse failure mode), so assert it
     assert "enemies_killed" in SPD_OBSERVATION_FIELDS
     assert "attack_nearest" in SPD_ACTIONS and "descend" in SPD_ACTIONS
+    # upgrading weapon vs armor must be TWO actions — bundling them (always weapon)
+    # was a hardcoded policy that left the hero in +0 armor, unable to survive Goo
+    assert "read_upgrade" in SPD_ACTIONS and "read_upgrade_armor" in SPD_ACTIONS
     # target-selection actions must exist AND stay index-aligned with the bridge's
     # enemy0..3 order; a drop/rename here surfaces only as silently wrong targeting
     for a in ("attack_enemy_1", "attack_enemy_2", "attack_enemy_3",

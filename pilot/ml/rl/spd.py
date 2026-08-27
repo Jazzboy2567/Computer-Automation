@@ -62,7 +62,10 @@ SPD_ACTIONS: list[str] = [
     "equip_gear",                              # wear a strictly-better weapon/armor you have the STR for
     "equip_misc",                              # put on a ring/artifact if a trinket slot is free
     "drink_strength",                          # drink an identified Potion of Strength (+1 STR, permanent)
-    "read_upgrade",                            # read an identified Scroll of Upgrade (targets your weapon)
+    # upgrade WEAPON vs ARMOR are two separate scroll decisions (weapon = damage now,
+    # armor = damage-reduction to survive a boss) — the agent chooses, never scripted
+    "read_upgrade",                            # read a Scroll of Upgrade into your WEAPON
+    "read_upgrade_armor",                      # read a Scroll of Upgrade into your ARMOR
     "throw_item",                              # throw the best missile weapon at the nearest visible enemy
     "shoot_bow",                               # fire the Spirit Bow (huntress) at the nearest visible enemy
     "quaff_unknown",                           # drink an unidentified potion (the ID gamble)
