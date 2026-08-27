@@ -313,6 +313,29 @@ def test_boss_overheal_streak_has_a_two_turn_grace():
     assert overheal(0.0) == 0.0   # boss no longer visible -> reset
 
 
+def test_boss_pending_lasts_from_sight_until_past_the_boss_floor():
+    # boss_pending = "met the boss, haven't dealt with it": 1 from first sight until the
+    # hero descends BELOW that floor (only possible by killing the boss). It must NOT be
+    # dodgeable by simply letting the boss leave view (boss_hp_frac back to 0 on floor 5)
+    env = SPDRealEnv(proc=FakeProc([_obs_line()]))
+
+    def pending(depth, bhp):
+        return env._augment_boss({"depth": depth, "boss_hp_frac": bhp})["boss_pending"]
+
+    assert pending(5, 0.0) == 0.0    # on the boss floor, boss not yet seen
+    assert pending(5, 0.8) == 1.0    # boss sighted -> pending
+    assert pending(5, 0.0) == 1.0    # boss out of view but still on its floor -> STILL pending
+    assert pending(6, 0.0) == 0.0    # descended past it (boss must be dead) -> cleared
+
+
+def test_boss_pending_resets_each_episode():
+    env = SPDRealEnv(proc=FakeProc([_obs_line(), _obs_line()]))
+    env._augment_boss({"depth": 5, "boss_hp_frac": 0.5})    # sighted
+    assert env._boss_seen_depth == 5
+    env.reset()
+    assert env._boss_seen_depth is None                     # cleared for the new run
+
+
 def test_enemy_charging_telegraph_passes_through_as_a_float_feature():
     # The bridge emits per-enemy `enemyN_charging` (Goo's pumping-up tell). It must
     # survive _to_obs as a float so the DQN featurizer (identity over scalars) feeds

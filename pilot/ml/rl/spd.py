@@ -38,6 +38,7 @@ SPD_OBSERVATION_FIELDS: dict[str, str] = {
     "enemyN_charging": "per focused enemy: telegraphed heavy-attack wind-up, player-visible (Goo 'pumping up': 1 = charging, 2 = about to release a doubled hit; 0 = none) — the agent LEARNS to react (step away / heal / burst), nothing scripted",
     "boss_hp_frac": "visible boss's HP fraction 0..1 (player reads the boss HP bar); 0 when no boss is in view — the reward scores damage dealt / healing during the boss fight",
     "boss_overheal": "1 after >2 consecutive turns of the boss regaining HP (derived in the env); flags the flee-and-let-it-heal stall (2-turn grace for a pump-up dodge)",
+    "boss_pending": "1 from first sight of a boss until the hero gets past its floor (derived in the env); the reward taxes each such turn so ignoring the boss and running out the clock is not free (the 'want to battle' pressure)",
 }
 
 # Discrete actions. Capabilities only — WHEN to use each is the agent's to
@@ -272,5 +273,17 @@ def spd_training_reward() -> RewardSpec:
     # 2 straight turns of the boss regaining HP (a 2-turn grace to dodge a telegraphed
     # pump-up), each further healing turn is charged — punishing the flee-and-stall that
     # lets Goo heal back up, on top of the symmetric heal term above.
-    flags = {**base.flag_penalties, "surrounded": -0.15, "boss_overheal": -0.5}
+    #
+    # ...and the "want to battle" pressure (Matthew, 2026-08-27). Diagnosis: the boss
+    # DAMAGE reward stopped the agent dying (27/30 -> 1/30) but flipped it into total
+    # AVOIDANCE — it paced and looted, never attacked, and ran out the clock with Goo at
+    # 98% HP, because avoiding was safe and cost nothing (a full-HP boss never triggers
+    # the heal penalty). boss_pending taxes every turn the hero has met the boss and not
+    # yet gotten past it, so running out the clock bleeds reward and committing to the
+    # fight wins. Kept modest so a hopeless fight can still be declined rather than made
+    # a forced suicide — the RIGHT engagement level is the agent's to LEARN (Matthew's
+    # "have it try a different want-to-battle and let it settle"); this only removes the
+    # free lunch of ignoring the boss. Un-farmable (a cost, and it ends when Goo dies).
+    flags = {**base.flag_penalties, "surrounded": -0.15, "boss_overheal": -0.5,
+             "boss_pending": -0.1}
     return base.model_copy(update={"rules": base.rules + shaping, "flag_penalties": flags})
