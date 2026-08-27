@@ -296,6 +296,23 @@ def test_close_sends_quit():
     assert proc.commands[-1] == "quit"
 
 
+def test_boss_overheal_streak_has_a_two_turn_grace():
+    # boss_overheal must fire only AFTER more than 2 straight turns of the boss
+    # regaining HP, so a 1-2 turn pump-up dodge is free but flee-and-stall is charged
+    env = SPDRealEnv(proc=FakeProc([_obs_line()]))
+
+    def overheal(bhp):
+        return env._augment_boss({"boss_hp_frac": bhp})["boss_overheal"]
+
+    assert overheal(0.5) == 0.0   # first sight of the boss
+    assert overheal(0.6) == 0.0   # heal turn 1 (grace)
+    assert overheal(0.7) == 0.0   # heal turn 2 (grace)
+    assert overheal(0.8) == 1.0   # heal turn 3 -> stall penalty fires
+    assert overheal(0.6) == 0.0   # took damage -> clock resets
+    assert overheal(0.7) == 0.0   # heal turn 1 again (grace)
+    assert overheal(0.0) == 0.0   # boss no longer visible -> reset
+
+
 def test_enemy_charging_telegraph_passes_through_as_a_float_feature():
     # The bridge emits per-enemy `enemyN_charging` (Goo's pumping-up tell). It must
     # survive _to_obs as a float so the DQN featurizer (identity over scalars) feeds

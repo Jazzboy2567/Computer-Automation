@@ -66,6 +66,26 @@ def test_reward_encodes_good_and_bad():
         assert death < -spec.compute(base, good, False, {})
 
 
+def test_boss_damage_rewarded_and_healing_penalized_un_farmably():
+    train = spd_training_reward()
+    ev = spd_reward_spec()
+    base = {"hp_current": 20, "depth": 5, "boss_hp_frac": 0.8}
+
+    def o(bhp):
+        d = dict(base)
+        d["boss_hp_frac"] = bhp
+        return d
+
+    dmg = train.compute(base, o(0.7), False, {})    # boss lost HP -> damage dealt
+    heal = train.compute(base, o(0.9), False, {})   # boss gained HP -> we let it heal
+    assert dmg > 0 and heal < 0
+    # SYMMETRIC: an equal damage-then-heal cycle nets ~0, so it can't be farmed the
+    # way the old enemies_visible flicker was
+    assert abs(dmg + heal) < 1e-6
+    # the boss shaping is training-only; the eval spec measures the real objective (depth)
+    assert ev.compute(base, o(0.7), False, {}) == ev.compute(base, o(0.9), False, {})
+
+
 def test_surrounded_penalty_is_training_only():
     train = spd_training_reward()
     ev = spd_reward_spec()
