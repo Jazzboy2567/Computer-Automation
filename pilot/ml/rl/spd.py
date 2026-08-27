@@ -33,6 +33,9 @@ SPD_OBSERVATION_FIELDS: dict[str, str] = {
     "starving": "1 if starving (no passive regen), else 0 (needs the hunger/buff icon or examine)",
     "has_ankh": "1 if an Ankh is held (revive item) (moderate: detect inventory item)",
     # Status effects (buffs/debuffs) are read via the magnifying-glass examine.
+    # Per focused-enemy fields (enemy0..3_*) come from the bridge's focus block:
+    # dx/dy/aware/hp/cooldown, plus:
+    "enemyN_charging": "per focused enemy: telegraphed heavy-attack wind-up, player-visible (Goo 'pumping up': 1 = charging, 2 = about to release a doubled hit; 0 = none) — the agent LEARNS to react (step away / heal / burst), nothing scripted",
 }
 
 # Discrete actions. Capabilities only — WHEN to use each is the agent's to
