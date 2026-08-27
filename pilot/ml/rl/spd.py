@@ -36,6 +36,8 @@ SPD_OBSERVATION_FIELDS: dict[str, str] = {
     # Per focused-enemy fields (enemy0..3_*) come from the bridge's focus block:
     # dx/dy/aware/hp/cooldown, plus:
     "enemyN_charging": "per focused enemy: telegraphed heavy-attack wind-up, player-visible (Goo 'pumping up': 1 = charging, 2 = about to release a doubled hit; 0 = none) — the agent LEARNS to react (step away / heal / burst), nothing scripted",
+    "boss_hp_frac": "visible boss's HP fraction 0..1 (player reads the boss HP bar); 0 when no boss is in view — the reward scores damage dealt / healing during the boss fight",
+    "boss_overheal": "1 after >2 consecutive turns of the boss regaining HP (derived in the env); flags the flee-and-let-it-heal stall (2-turn grace for a pump-up dodge)",
 }
 
 # Discrete actions. Capabilities only — WHEN to use each is the agent's to
@@ -236,6 +238,19 @@ def spd_training_reward() -> RewardSpec:
         # learnable; equipping still pays via gear_score, so the agent learns the
         # sequence rather than being scripted into it.
         RewardRule(field="str", direction="up", weight=2.0, per_unit=True),
+        # BOSS FIGHT (Matthew's lever, 2026-08-27). Diagnosis: the agent reaches Goo
+        # but NEVER attacks it — Goo ends at full HP; it loots/mis-targets/dies, because
+        # a ~100-HP boss is far too many hits for random exploration to ever KILL, so the
+        # sparse +2 kill reward is never experienced and "attack the boss" is never
+        # reinforced (0 beat-Goo even when handed tier-3 gear). Fix: make the boss's HP
+        # BAR the objective during the fight. A big SYMMETRIC term pays per unit of damage
+        # dealt (boss_hp_frac down) and un-pays for healing (up) — a dense per-hit signal
+        # (~+0.8 a hit) that teaches attacking, while the damage<->heal cycle nets exactly
+        # ZERO (un-farmable, the enemies_visible lesson) and telescopes to the real HP drop
+        # so a legit 1-2 turn pump-up dodge isn't net-punished. Inert off the boss floor
+        # (boss_hp_frac = 0 when no boss is visible) and on the sim (field absent -> 0).
+        RewardRule(field="boss_hp_frac", direction="down", weight=8.0, per_unit=True),
+        RewardRule(field="boss_hp_frac", direction="up", weight=-8.0, per_unit=True),
         # NOTE: a potential-based hp_frac shaping pair (reward healing, cost damage,
         # symmetrically) was tried here (2026-08-25) to stop the agent fighting
         # wounded — and did NOTHING: the death-diagnostic mean HP baseline stayed
@@ -253,5 +268,9 @@ def spd_training_reward() -> RewardSpec:
     # from a chokepoint (it already sees the walkable ring) instead of in the open.
     # A STATE penalty, not a scripted retreat: the agent learns HOW to un-flank. Kept
     # modest so a genuinely worthwhile 1v2 (a finishing blow) can still be chosen.
-    flags = {**base.flag_penalties, "surrounded": -0.15}
+    # ...plus the "don't let the boss heal" cost Matthew asked for: after MORE THAN
+    # 2 straight turns of the boss regaining HP (a 2-turn grace to dodge a telegraphed
+    # pump-up), each further healing turn is charged — punishing the flee-and-stall that
+    # lets Goo heal back up, on top of the symmetric heal term above.
+    flags = {**base.flag_penalties, "surrounded": -0.15, "boss_overheal": -0.5}
     return base.model_copy(update={"rules": base.rules + shaping, "flag_penalties": flags})

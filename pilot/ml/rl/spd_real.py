@@ -106,11 +106,35 @@ class SPDRealEnv(GameEnv):
         # best run served by this env instance (training or eval), for reporting
         self.best_depth = 0
         self.best_gear = ""
+        # boss-fight tracking: count consecutive turns the (visible) boss regains HP,
+        # so the reward can penalise LETTING it heal (the flee-and-stall failure mode)
+        # while giving a 2-turn grace to step away from a telegraphed attack
+        self._prev_boss_hp: Optional[float] = None
+        self._boss_heal_streak = 0
         self._proc = proc or launch_server()
 
     def observation_fields(self) -> list[str]:
         return ["hp_current", "hp_max", "hp_frac", "level", "xp_frac", "depth",
-                "gold", "enemies_visible", "inventory_count", "starving", "has_ankh"]
+                "gold", "enemies_visible", "inventory_count", "starving", "has_ankh",
+                "boss_hp_frac"]
+
+    def _augment_boss(self, obs: Observation) -> Observation:
+        """Track the visible boss's healing over turns. `boss_overheal` fires only
+        after MORE than 2 consecutive turns of the boss regaining HP — a 2-turn grace
+        so the agent can step away from a telegraphed pump-up, but a cost if it flees
+        and lets Goo heal back up (Goo only heals while you are NOT engaging it)."""
+        bhp = float(obs.get("boss_hp_frac", 0.0) or 0.0)
+        prev = self._prev_boss_hp
+        if bhp <= 0.0 or prev is None:
+            self._boss_heal_streak = 0          # no boss in view (or first sight)
+        elif bhp > prev + 1e-6:
+            self._boss_heal_streak += 1         # boss regained HP -> we let it heal
+        elif bhp < prev - 1e-6:
+            self._boss_heal_streak = 0          # we damaged it -> reset the clock
+        # unchanged HP keeps the streak as-is
+        self._prev_boss_hp = bhp if bhp > 0.0 else None
+        obs["boss_overheal"] = 1.0 if self._boss_heal_streak > 2 else 0.0
+        return obs
 
     # ------------------------------------------------------------- protocol
     def _send(self, command: str) -> dict:
@@ -151,6 +175,8 @@ class SPDRealEnv(GameEnv):
     # ------------------------------------------------------------- GameEnv
     def reset(self) -> Observation:
         self.steps = 0
+        self._prev_boss_hp = None
+        self._boss_heal_streak = 0
         depth = 1
         if self.curriculum is not None:
             depth = max(1, int(self.curriculum(self.episode)))
@@ -159,12 +185,12 @@ class SPDRealEnv(GameEnv):
             f"reset {self.base_seed + self.episode} {self.hero} {self.challenges} {depth}"
         )
         self.episode += 1
-        return self._to_obs(reply)
+        return self._augment_boss(self._to_obs(reply))
 
     def step(self, action: str) -> tuple[Observation, bool, dict[str, Any]]:
         self.steps += 1
         reply = self._send(f"act {action}")
-        obs = self._to_obs(reply)
+        obs = self._augment_boss(self._to_obs(reply))
         done = bool(reply.get("done")) or self.steps >= self.max_steps
         info = {"depth": obs.get("depth", 1.0), "turns": reply.get("turns", 0),
                 "won": bool(obs.get("won", 0.0)), "gear": reply.get("gear", "")}
