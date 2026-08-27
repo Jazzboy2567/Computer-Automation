@@ -111,6 +111,9 @@ class SPDRealEnv(GameEnv):
         # while giving a 2-turn grace to step away from a telegraphed attack
         self._prev_boss_hp: Optional[float] = None
         self._boss_heal_streak = 0
+        # depth at which a boss was last seen this episode; drives boss_pending (the
+        # "you've met the boss and haven't dealt with it yet" state the reward taxes)
+        self._boss_seen_depth: Optional[float] = None
         self._proc = proc or launch_server()
 
     def observation_fields(self) -> list[str]:
@@ -119,11 +122,20 @@ class SPDRealEnv(GameEnv):
                 "boss_hp_frac"]
 
     def _augment_boss(self, obs: Observation) -> Observation:
-        """Track the visible boss's healing over turns. `boss_overheal` fires only
-        after MORE than 2 consecutive turns of the boss regaining HP — a 2-turn grace
-        so the agent can step away from a telegraphed pump-up, but a cost if it flees
-        and lets Goo heal back up (Goo only heals while you are NOT engaging it)."""
+        """Derive the boss-fight signals the reward uses.
+
+        `boss_overheal` fires after MORE than 2 straight turns of the boss regaining
+        HP — a 2-turn grace to dodge a telegraphed pump-up, then a cost for fleeing and
+        letting it heal (Goo only heals while you are NOT engaging it).
+
+        `boss_pending` is 1 from the moment a boss is first seen until the hero gets
+        PAST its floor (only possible by killing it). It's the "you've met the boss and
+        still haven't dealt with it" state; the reward taxes each such turn, so ignoring
+        the boss and running out the clock bleeds reward — this is the tunable "want to
+        battle" pressure. How hard to engage is still the agent's to LEARN (fight now,
+        kite, heal first); the tax only makes total avoidance non-free."""
         bhp = float(obs.get("boss_hp_frac", 0.0) or 0.0)
+        depth = float(obs.get("depth", 1.0))
         prev = self._prev_boss_hp
         if bhp <= 0.0 or prev is None:
             self._boss_heal_streak = 0          # no boss in view (or first sight)
@@ -134,6 +146,13 @@ class SPDRealEnv(GameEnv):
         # unchanged HP keeps the streak as-is
         self._prev_boss_hp = bhp if bhp > 0.0 else None
         obs["boss_overheal"] = 1.0 if self._boss_heal_streak > 2 else 0.0
+
+        if bhp > 0.0:
+            self._boss_seen_depth = depth       # met the boss on this floor
+        # pending until we descend BELOW the floor we met it on (needs the kill —
+        # the boss-floor exit stays sealed until the boss dies)
+        pending = (self._boss_seen_depth is not None and depth <= self._boss_seen_depth)
+        obs["boss_pending"] = 1.0 if pending else 0.0
         return obs
 
     # ------------------------------------------------------------- protocol
@@ -177,6 +196,7 @@ class SPDRealEnv(GameEnv):
         self.steps = 0
         self._prev_boss_hp = None
         self._boss_heal_streak = 0
+        self._boss_seen_depth = None
         depth = 1
         if self.curriculum is not None:
             depth = max(1, int(self.curriculum(self.episode)))
