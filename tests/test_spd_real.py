@@ -296,6 +296,17 @@ def test_close_sends_quit():
     assert proc.commands[-1] == "quit"
 
 
+def test_enemy_charging_telegraph_passes_through_as_a_float_feature():
+    # The bridge emits per-enemy `enemyN_charging` (Goo's pumping-up tell). It must
+    # survive _to_obs as a float so the DQN featurizer (identity over scalars) feeds
+    # it to the net — a silent drop here would blind the agent to the boss telegraph.
+    proc = FakeProc([_obs_line(enemy0_charging=2, enemy1_charging=0)])
+    env = SPDRealEnv(proc=proc)
+    obs = env.reset()
+    assert obs["enemy0_charging"] == 2.0 and isinstance(obs["enemy0_charging"], float)
+    assert obs["enemy1_charging"] == 0.0
+
+
 class _StubEnv:
     """Minimal GameEnv stand-in: each episode replays a scripted list of
     (obs, done, info) steps, so _evaluate's win-rate math can be asserted with no
