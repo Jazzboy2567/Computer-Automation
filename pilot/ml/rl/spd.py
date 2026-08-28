@@ -269,7 +269,12 @@ def spd_training_reward() -> RewardSpec:
         # pump-up hurts far more than a normal exchange. The agent SEES the charge
         # (enemy0_charging) and learns to dodge it then re-engage — a consequence, not a
         # scripted retreat. Inert except right after a boss telegraph (0 otherwise).
-        RewardRule(field="hp_current", direction="down", weight=-0.5, per_unit=True,
+        # WEIGHT -0.2 (tuned down from -0.5, 2026-08-28): at -0.5 the pump-up cost
+        # (~-7.5..-12.5 a hit) OVERWHELMED the +1.6/hit damage reward, making the whole
+        # fight net-negative, so the agent went back to AVOIDING Goo entirely (equip_gear
+        # no-op spam, Goo untouched). -0.2 (~-3..-5 a pump-up) stings enough to teach the
+        # dodge but keeps a normal attack exchange net-positive so engaging still wins.
+        RewardRule(field="hp_current", direction="down", weight=-0.2, per_unit=True,
                    scale_by="boss_was_charging", scale_default=0.0),
         # NOTE: a potential-based hp_frac shaping pair (reward healing, cost damage,
         # symmetrically) was tried here (2026-08-25) to stop the agent fighting
