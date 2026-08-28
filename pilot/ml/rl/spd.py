@@ -250,8 +250,16 @@ def spd_training_reward() -> RewardSpec:
         # ZERO (un-farmable, the enemies_visible lesson) and telescopes to the real HP drop
         # so a legit 1-2 turn pump-up dodge isn't net-punished. Inert off the boss floor
         # (boss_hp_frac = 0 when no boss is visible) and on the sim (field absent -> 0).
-        RewardRule(field="boss_hp_frac", direction="down", weight=8.0, per_unit=True),
-        RewardRule(field="boss_hp_frac", direction="up", weight=-8.0, per_unit=True),
+        #
+        # WEIGHT 16 (raised from 8, 2026-08-27). At weight 8 each hit paid ~+0.8 while
+        # Goo's counter-hit cost ~-0.2..-1.8 (2x when pumped), so ATTACKING was roughly
+        # break-even-to-negative per turn and the agent rationally AVOIDED the fight
+        # (diagnostics: it paced/looted/no-op-spammed, Goo untouched). At weight 16 a hit
+        # pays ~+1.6, clearly out-valuing the counter-hit, so attacking is net-POSITIVE
+        # every turn — now 1-step TD can learn it greedily without needing to credit the
+        # far-off kill. Still symmetric (heal costs the same) so it stays un-farmable.
+        RewardRule(field="boss_hp_frac", direction="down", weight=16.0, per_unit=True),
+        RewardRule(field="boss_hp_frac", direction="up", weight=-16.0, per_unit=True),
         # NOTE: a potential-based hp_frac shaping pair (reward healing, cost damage,
         # symmetrically) was tried here (2026-08-25) to stop the agent fighting
         # wounded — and did NOTHING: the death-diagnostic mean HP baseline stayed
@@ -274,16 +282,14 @@ def spd_training_reward() -> RewardSpec:
     # pump-up), each further healing turn is charged — punishing the flee-and-stall that
     # lets Goo heal back up, on top of the symmetric heal term above.
     #
-    # ...and the "want to battle" pressure (Matthew, 2026-08-27). Diagnosis: the boss
-    # DAMAGE reward stopped the agent dying (27/30 -> 1/30) but flipped it into total
-    # AVOIDANCE — it paced and looted, never attacked, and ran out the clock with Goo at
-    # 98% HP, because avoiding was safe and cost nothing (a full-HP boss never triggers
-    # the heal penalty). boss_pending taxes every turn the hero has met the boss and not
-    # yet gotten past it, so running out the clock bleeds reward and committing to the
-    # fight wins. Kept modest so a hopeless fight can still be declined rather than made
-    # a forced suicide — the RIGHT engagement level is the agent's to LEARN (Matthew's
-    # "have it try a different want-to-battle and let it settle"); this only removes the
-    # free lunch of ignoring the boss. Un-farmable (a cost, and it ends when Goo dies).
-    flags = {**base.flag_penalties, "surrounded": -0.15, "boss_overheal": -0.5,
-             "boss_pending": -0.1}
+    # NOTE: a boss_pending "want to battle" TAX (-0.1/turn while a met boss is unbeaten,
+    # 2026-08-27) was tried to stop the avoidance and REVERTED — it backfired. Because
+    # the agent can't yet WIN the fight, taxing "met the boss and haven't beaten it" just
+    # taught it to avoid the boss FLOOR entirely (reachGoo collapsed to 0%, and forced
+    # onto floor 5 it switched to a new no-op, zap_enemy_2 95%). You can't price-pressure
+    # an agent into a fight it doesn't know how to win. The fix instead is above: make
+    # each ATTACK immediately pay (weight 16) so engaging is the greedy choice. The
+    # boss_pending FEATURE stays in the observation (harmless, tells the agent it's on a
+    # live boss floor); only its penalty was removed.
+    flags = {**base.flag_penalties, "surrounded": -0.15, "boss_overheal": -0.5}
     return base.model_copy(update={"rules": base.rules + shaping, "flag_penalties": flags})
