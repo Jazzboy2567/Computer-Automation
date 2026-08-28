@@ -41,6 +41,11 @@ class RewardRule(BaseModel):
     # dominate every other term and, worse, blow up the TD targets a value
     # network is trying to fit — so a ramp should climb and then SATURATE.
     scale_cap: Optional[float] = None
+    # What a scale_by field defaults to when it's absent from the observation. 1.0
+    # (the default) suits always-present fields like depth/stall_streak. Set 0.0 for
+    # a rule that must be INERT unless its scale field is present (e.g. a penalty that
+    # only applies right after a boss telegraph — absent everywhere else, incl. the sim).
+    scale_default: float = 1.0
 
     def value(self, prev: Observation, cur: Observation) -> float:
         if self.max_depth is not None and cur.get("depth", 0.0) > self.max_depth:
@@ -51,7 +56,7 @@ class RewardRule(BaseModel):
             fields = [self.scale_by] if isinstance(self.scale_by, str) else self.scale_by
             scale = 1.0
             for f in fields:
-                scale *= cur.get(f, 1.0)
+                scale *= cur.get(f, self.scale_default)
             if self.scale_cap is not None:
                 scale = min(scale, self.scale_cap)
             weight *= scale

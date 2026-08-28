@@ -328,6 +328,31 @@ def test_boss_pending_lasts_from_sight_until_past_the_boss_floor():
     assert pending(6, 0.0) == 0.0    # descended past it (boss must be dead) -> cleared
 
 
+def test_boss_was_charging_flags_the_turn_after_a_telegraph():
+    # boss_was_charging must be 1 the turn AFTER the nearest enemy telegraphed, so the
+    # reward can make HP lost to the (now-landing) pump-up extra costly
+    env = SPDRealEnv(proc=FakeProc([_obs_line()]))
+
+    def was_charging(charge_now):
+        return env._augment_boss({"enemy0_charging": charge_now})["boss_was_charging"]
+
+    assert was_charging(0) == 0.0    # no telegraph last turn
+    assert was_charging(1) == 0.0    # telegraph STARTS this turn (last turn was 0)
+    assert was_charging(2) == 1.0    # last turn was charging -> the hit is landing now
+    assert was_charging(0) == 1.0    # last turn was 2 (about to release) -> still flagged
+    assert was_charging(0) == 0.0    # quiet again
+
+
+def test_boss_pump_up_damage_is_penalized_only_after_a_telegraph():
+    from pilot.ml.rl.spd import spd_training_reward
+    reward = spd_training_reward()
+    prev = {"hp_current": 25.0, "depth": 5}
+    # same 8 HP lost, once with the boss having telegraphed last turn, once without
+    hit_after_charge = reward.compute(prev, {"hp_current": 17.0, "depth": 5, "boss_was_charging": 1.0}, False, {})
+    hit_normal = reward.compute(prev, {"hp_current": 17.0, "depth": 5, "boss_was_charging": 0.0}, False, {})
+    assert hit_after_charge < hit_normal    # eating a telegraphed pump-up costs extra
+
+
 def test_boss_pending_resets_each_episode():
     env = SPDRealEnv(proc=FakeProc([_obs_line(), _obs_line()]))
     env._augment_boss({"depth": 5, "boss_hp_frac": 0.5})    # sighted

@@ -114,6 +114,9 @@ class SPDRealEnv(GameEnv):
         # depth at which a boss was last seen this episode; drives boss_pending (the
         # "you've met the boss and haven't dealt with it yet" state the reward taxes)
         self._boss_seen_depth: Optional[float] = None
+        # the nearest enemy's telegraph value LAST turn; drives boss_was_charging so the
+        # reward can make eating a telegraphed pump-up hit extra-costly (learned dodge)
+        self._prev_enemy0_charging = 0.0
         self._proc = proc or launch_server()
 
     def observation_fields(self) -> list[str]:
@@ -153,6 +156,13 @@ class SPDRealEnv(GameEnv):
         # the boss-floor exit stays sealed until the boss dies)
         pending = (self._boss_seen_depth is not None and depth <= self._boss_seen_depth)
         obs["boss_pending"] = 1.0 if pending else 0.0
+
+        # 1 if the nearest enemy was telegraphing a heavy attack LAST turn — so HP lost
+        # THIS turn is (mostly) the pump-up landing. The reward scales an extra damage
+        # penalty by this, making it costly to stand in a telegraphed hit; the agent
+        # already SEES the charge (enemy0_charging) and learns to step away then re-engage.
+        obs["boss_was_charging"] = 1.0 if self._prev_enemy0_charging > 0.0 else 0.0
+        self._prev_enemy0_charging = float(obs.get("enemy0_charging", 0.0) or 0.0)
         return obs
 
     # ------------------------------------------------------------- protocol
@@ -197,6 +207,7 @@ class SPDRealEnv(GameEnv):
         self._prev_boss_hp = None
         self._boss_heal_streak = 0
         self._boss_seen_depth = None
+        self._prev_enemy0_charging = 0.0
         depth = 1
         if self.curriculum is not None:
             depth = max(1, int(self.curriculum(self.episode)))

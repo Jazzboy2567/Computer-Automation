@@ -39,6 +39,7 @@ SPD_OBSERVATION_FIELDS: dict[str, str] = {
     "boss_hp_frac": "visible boss's HP fraction 0..1 (player reads the boss HP bar); 0 when no boss is in view — the reward scores damage dealt / healing during the boss fight",
     "boss_overheal": "1 after >2 consecutive turns of the boss regaining HP (derived in the env); flags the flee-and-let-it-heal stall (2-turn grace for a pump-up dodge)",
     "boss_pending": "1 from first sight of a boss until the hero gets past its floor (derived in the env); the reward taxes each such turn so ignoring the boss and running out the clock is not free (the 'want to battle' pressure)",
+    "boss_was_charging": "1 if the nearest enemy was telegraphing a heavy attack LAST turn (derived in the env); scales an EXTRA penalty on HP lost this turn, so eating a pump-up hit is costly and the agent learns to dodge the telegraph",
 }
 
 # Discrete actions. Capabilities only — WHEN to use each is the agent's to
@@ -260,6 +261,16 @@ def spd_training_reward() -> RewardSpec:
         # far-off kill. Still symmetric (heal costs the same) so it stays un-farmable.
         RewardRule(field="boss_hp_frac", direction="down", weight=16.0, per_unit=True),
         RewardRule(field="boss_hp_frac", direction="up", weight=-16.0, per_unit=True),
+        # SURVIVE THE PUMP-UP (Matthew's survival tweak, 2026-08-28). The bigger damage
+        # reward got the agent to ATTACK Goo (untouched -> ~40% HP) but it dies before
+        # finishing (29/30) — it eats Goo's telegraphed pumped hit (3x damage) instead of
+        # stepping away. This charges an EXTRA cost for HP lost right after a telegraph
+        # (boss_was_charging = the nearest enemy was winding up last turn), so taking the
+        # pump-up hurts far more than a normal exchange. The agent SEES the charge
+        # (enemy0_charging) and learns to dodge it then re-engage — a consequence, not a
+        # scripted retreat. Inert except right after a boss telegraph (0 otherwise).
+        RewardRule(field="hp_current", direction="down", weight=-0.5, per_unit=True,
+                   scale_by="boss_was_charging", scale_default=0.0),
         # NOTE: a potential-based hp_frac shaping pair (reward healing, cost damage,
         # symmetrically) was tried here (2026-08-25) to stop the agent fighting
         # wounded — and did NOTHING: the death-diagnostic mean HP baseline stayed
