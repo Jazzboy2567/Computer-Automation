@@ -177,7 +177,8 @@ def _rl(args) -> int:
                 print(f"[{i['interval']:>3}] eps_total={i['total_eps']:>7} "
                       f"eps={i['eps']:.2f}  return={i['return']:>8.2f} "
                       f"(rand {i['return_random']:.0f})  floor={i['depth']:>4.2f}  "
-                      f"reachGoo={i.get('reach_goo', 0):.0%} beatGoo={i.get('beat_goo', 0):.0%}  "
+                      f"reachGoo={i.get('reach_goo', 0):.0%} beatGoo={i.get('beat_goo', 0):.0%} "
+                      f"bossKill={i.get('boss_beat', 0):.0%}  "
                       f"best={i['best_depth']} gear={i['best_gear']!r}  "
                       f"curve {i['curve_start']:.0f}->{i['curve_end']:.0f}"
                       f"{i['new_best']}", flush=True)

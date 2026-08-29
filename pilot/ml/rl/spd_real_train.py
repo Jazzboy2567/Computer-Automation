@@ -67,6 +67,33 @@ def _evaluate(env: SPDRealEnv, policy, reward: RewardSpec, episodes: int,
     return mean(rets), mean(survs), mean(depths), reached_goo / n, beat_goo / n
 
 
+_BOSS_EVAL_SEED = 980_000   # floor-5 boss-fight eval dungeons (granted gear via curriculum)
+
+
+def _boss_fight_eval(env: SPDRealEnv, policy, episodes: int, feat=spd_featurizer) -> float:
+    """Beat-Goo rate from FLOOR-5 starts, isolating the boss fight from the floor-1..4
+    journey. The env is built with a floor-5 curriculum, so each episode begins in Goo's
+    arena with level-appropriate (granted) gear; reaching floor 6 is only possible by
+    KILLING Goo, so the fraction that get there IS the beat-Goo rate.
+
+    Why this exists: the floor-1 eval almost never reaches Goo (reachGoo ~0-20%), so it
+    is blind to boss-fighting skill — and a run that saves its "best" policy by floor-1
+    depth will happily overwrite a good Goo-fighter with a better journey-runner. This
+    gives run_continuous a direct read on the actual objective so it can preserve the
+    best FIGHTER. Measures the fight with handed gear, same caveat as the acquisition kit.
+    """
+    beat = 0
+    for _ in range(episodes):
+        obs = env.reset()
+        done, won = False, False
+        while not done:
+            obs, done, info = env.step(policy(feat(obs)))
+            if int(info.get("depth", 5)) >= 6:
+                won = True
+        beat += int(won)
+    return beat / max(1, episodes)
+
+
 def _report(result: RLResult, reward: RewardSpec) -> str:
     return "\n".join([
         "# Shattered Pixel Dungeon — agent (REAL game, headless)", "",
@@ -231,6 +258,7 @@ def run_continuous(
     seed: int = 0,
     max_steps: int = 600,
     eval_episodes: int = 30,
+    boss_eval_episodes: int = 12,
     hero: str = "warrior",
     challenges: int = 0,
     agent_kind: str = "dqn",
@@ -261,6 +289,9 @@ def run_continuous(
 
     train_env = SPDRealEnv(seed=seed, curriculum=curriculum, **kw)
     eval_env = SPDRealEnv(seed=_EVAL_SEED, **kw)
+    # boss-fight eval: floor-5 starts (granted gear) so it directly measures beat-Goo,
+    # which the floor-1 eval almost never reaches. Lets policy_best keep the best FIGHTER.
+    boss_env = SPDRealEnv(seed=_BOSS_EVAL_SEED, curriculum=lambda ep: 5, **kw)
     # random baseline is constant — measure it once
     rng = random.Random(7)
     rr, sr, dr, _, _ = _evaluate(eval_env, lambda o: rng.choice(SPDRealEnv.action_space),
@@ -280,6 +311,8 @@ def run_continuous(
                 eval_env.episode = 0                  # replay the same eval dungeons
                 rt, st, dt, reach5, beat5 = _evaluate(
                     eval_env, agent.policy, reward, eval_episodes, feat=feat)
+                boss_env.episode = 0                  # replay the same boss dungeons
+                boss_beat = _boss_fight_eval(boss_env, agent.policy, boss_eval_episodes, feat=feat)
             except RuntimeError as e:
                 # The headless bridge is a JVM and can die mid-episode — a native/OOM
                 # crash (no Python-catchable stack) or un-soaked deep content. For an
@@ -294,7 +327,7 @@ def run_continuous(
                 consecutive_crashes += 1
                 print(f"[interval {k}] EnvServer died ({e!r}); restarting envs "
                       f"(restart #{env_restarts}) and continuing", flush=True)
-                for ev in (train_env, eval_env):
+                for ev in (train_env, eval_env, boss_env):
                     try:
                         ev.close()
                     except Exception:
@@ -304,6 +337,7 @@ def run_continuous(
                     break
                 train_env = SPDRealEnv(seed=seed + 100_000 * env_restarts, curriculum=curriculum, **kw)
                 eval_env = SPDRealEnv(seed=_EVAL_SEED, **kw)
+                boss_env = SPDRealEnv(seed=_BOSS_EVAL_SEED, curriculum=lambda ep: 5, **kw)
                 eval_env.best_depth, eval_env.best_gear = 0, ""
                 k -= 1                                # this interval didn't complete
                 continue
@@ -317,8 +351,12 @@ def run_continuous(
             # beats Goo, then most-often reaches it, then average depth, then return.
             # A policy that reaches floor 6 half the time beats one that averages a
             # deeper floor but never actually kills the boss.
+            # Rank by BOSS-FIGHTING first (floor-5 beat-Goo rate) so a good fighter is
+            # never overwritten by a better journey-runner — the floor-1 metrics below
+            # break ties. This is the fix for the "policy_best is blind to the boss"
+            # gap: the objective is beating Goo, so the checkpoint is ranked by it.
             new_best = ""
-            score = (beat5, reach5, dt, rt)
+            score = (boss_beat, beat5, reach5, dt, rt)
             if best_score is None or score > best_score:
                 best_score = score
                 joblib.dump(agent.Q, ws.model_dir / "policy_best.joblib")
@@ -331,6 +369,8 @@ def run_continuous(
                 # the repeatable-success metrics: what fraction of eval runs reach
                 # the Goo floor, and what fraction get past it (i.e. beat Goo)
                 "reach_goo": round(reach5, 2), "beat_goo": round(beat5, 2),
+                # beat-Goo rate from floor-5 starts (the boss fight in isolation)
+                "boss_beat": round(boss_beat, 2),
                 "best_depth": eval_env.best_depth, "best_gear": eval_env.best_gear,
                 "curve_start": curve[0], "curve_end": curve[-1],
                 "new_best": new_best, "workspace": str(ws.path),
@@ -342,7 +382,7 @@ def run_continuous(
                 except Exception as e:
                     print(f"[interval {k}] report failed (continuing): {e!r}", flush=True)
     finally:
-        for ev in (train_env, eval_env):
+        for ev in (train_env, eval_env, boss_env):
             try:
                 ev.close()
             except Exception:
