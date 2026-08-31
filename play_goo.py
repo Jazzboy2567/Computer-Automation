@@ -99,7 +99,12 @@ def _show(obs: dict, info: dict, turn: int) -> None:
     dx, dy = int(obs.get("enemy0_dx", 0)), int(obs.get("enemy0_dy", 0))
     if boss > 0:
         adj = "(ADJACENT)" if max(abs(dx), abs(dy)) <= 1 else ""
-        tag = "   <<< GOO IS PUMPING UP! >>>" if charge >= 1 else ""
+        if charge >= 2:
+            tag = "   <<< GOO FULLY CHARGED — BIG RANGED HIT IMMINENT (get out of range!) >>>"
+        elif charge >= 1:
+            tag = "   <<< GOO IS PUMPING UP (charging — level 1) >>>"
+        else:
+            tag = ""
         print(f"  GOO: {boss * 100:3.0f}% HP   at dx={dx:+d} dy={dy:+d} {adj}{tag}")
     elif float(obs.get("enemy0_hp", 0) or 0) > 0:
         print(f"  Enemy: {float(obs.get('enemy0_hp', 0)) * 100:3.0f}% HP"
