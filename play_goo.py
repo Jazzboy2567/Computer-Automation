@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 os.environ.setdefault("PILOT_SEED_ACQ_KIT_PROB", "1.0")  # gear-up materials available
+os.environ.setdefault("PILOT_DENSE_MAP", "1")            # show the surrounding tiles
 
 import joblib
 
@@ -37,6 +38,51 @@ def _fmt_actions() -> str:
     if row:
         lines.append("   ".join(row))
     return "\n".join("  " + ln for ln in lines)
+
+
+_MAP_R = 4   # 9x9 egocentric window (matches rlbridge Observations.MAP_R)
+# bit index -> meaning (rlbridge Observations): 0 unknown,1 wall,2 water,3 hazard,
+# 4 door,5 exit,6 grass,7 enemy(aware),8 enemy(unaware),9 loot
+
+
+def _minimap(obs: dict) -> str:
+    bits = obs.get("map_bits")
+    n = 2 * _MAP_R + 1
+    if not bits or len(bits) < n * n:
+        return "  (tile map off — run with PILOT_DENSE_MAP=1)"
+
+    def sym(b: int, center: bool) -> str:
+        if center:
+            return "@"
+        if b & (1 << 7):
+            return "G"          # enemy that has noticed you — Goo, in the arena
+        if b & (1 << 8):
+            return "g"          # sleeping/wandering enemy
+        if b & (1 << 9):
+            return "$"          # loot
+        if b & (1 << 1):
+            return "#"          # wall (kite Goo's charge around these)
+        if b & (1 << 2):
+            return "~"          # water (Goo's ooze / the debuff wash off here)
+        if b & (1 << 4):
+            return "+"          # door (chokepoint)
+        if b & (1 << 3):
+            return "X"          # chasm / trap
+        if b & (1 << 5):
+            return ">"          # down-stairs
+        if b & (1 << 6):
+            return '"'          # tall grass
+        if b & (1 << 0):
+            return " "          # never seen (fog)
+        return "."              # seen floor
+
+    rows = []
+    for dy in range(n):
+        cells = [sym(int(bits[dy * n + dx]), dy == _MAP_R and dx == _MAP_R) for dx in range(n)]
+        rows.append("    " + " ".join(cells))
+    legend = ('    @you  G Goo  # wall  ~ water  + door  X hazard  > stairs  '
+              '" grass  $ loot  (blank = unseen)')
+    return "  Nearby tiles (you are @, north is up):\n" + "\n".join(rows) + "\n" + legend
 
 
 def _show(obs: dict, info: dict, turn: int) -> None:
@@ -64,6 +110,7 @@ def _show(obs: dict, info: dict, turn: int) -> None:
           f"  gear_to_equip={'yes' if obs.get('gear_available', 0) else 'no'}")
     print(f"  Adjacent enemies: {obs.get('enemies_adjacent', 0):.0f}"
           f"   |   stairs {'seen' if obs.get('stairs_dist', 30) < 30 else 'not found'}")
+    print(_minimap(obs))
 
 
 def _prompt() -> str:

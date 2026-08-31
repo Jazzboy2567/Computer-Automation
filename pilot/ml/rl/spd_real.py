@@ -62,8 +62,16 @@ def launch_server(clone: Optional[Path] = None) -> subprocess.Popen:
             f"rlbridge classpath not found at {cp_file}. Clone the SPD repo and run "
             f"`gradlew :rlbridge:writeClasspath` there, or set {SPD_CLONE_ENV}."
         )
+    # Opt-in dense egocentric tile map (walls/water/doors/hazards in a 9x9 window):
+    # the coarse 8-direction passability ring can't represent the wall/water LAYOUT a
+    # boss fight needs (kiting Goo's charge around a corner, using water vs its ooze).
+    # Runtime JVM flag (no recompile). Set PILOT_DENSE_MAP=1 for boss training + demos.
+    cmd = ["java"]
+    if os.environ.get("PILOT_DENSE_MAP", "").strip().lower() in ("1", "true", "yes"):
+        cmd.append("-Drlbridge.densemap=true")
+    cmd += ["-cp", cp_file.read_text(encoding="utf-8").strip(), "rlbridge.EnvServer"]
     return subprocess.Popen(
-        ["java", "-cp", cp_file.read_text(encoding="utf-8").strip(), "rlbridge.EnvServer"],
+        cmd,
         cwd=clone / "core" / "src" / "main" / "assets",   # Gdx.files.internal resolves here
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
