@@ -60,6 +60,8 @@ def _minimap(obs: dict) -> str:
             return "g"          # sleeping/wandering enemy
         if b & (1 << 9):
             return "$"          # loot
+        if b & (1 << 5):        # down-stairs — BEFORE wall (a LOCKED_EXIT is solid too)
+            return ">" if not (b & (1 << 1)) else "E"   # E = exit still LOCKED (need the key)
         if b & (1 << 4):
             return "+"          # door — BEFORE wall: a closed door is solid (wall bit
                                 #   set too), but it's a passable chokepoint, not a wall
@@ -69,8 +71,6 @@ def _minimap(obs: dict) -> str:
             return "~"          # water (Goo's ooze / the debuff wash off here)
         if b & (1 << 3):
             return "X"          # chasm / trap
-        if b & (1 << 5):
-            return ">"          # down-stairs
         if b & (1 << 10):
             return '"'          # TALL grass — blocks vision, gives stealth (sneak Goo)
         if b & (1 << 6):
@@ -84,7 +84,7 @@ def _minimap(obs: dict) -> str:
         cells = [sym(int(bits[dy * n + dx]), dy == _MAP_R and dx == _MAP_R) for dx in range(n)]
         rows.append("    " + " ".join(cells))
     legend = ('    @ you   . floor   # wall   ~ water   + door   X hazard   > stairs   '
-              '" tall-grass(blocks sight)   , short-grass   G/g enemy   $ loot   (blank = unseen)')
+              'E locked-exit(use the key: descend)   " tall-grass   , short-grass   G/g enemy   $ loot   (blank=unseen)')
     return "  Nearby tiles (you are @, north is up):\n" + "\n".join(rows) + "\n" + legend
 
 
