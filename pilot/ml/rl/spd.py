@@ -45,7 +45,10 @@ SPD_OBSERVATION_FIELDS: dict[str, str] = {
 # Discrete actions. Capabilities only — WHEN to use each is the agent's to
 # learn, never scripted (the project's no-hardcoding rule).
 SPD_ACTIONS: list[str] = [
-    "move_n", "move_s", "move_e", "move_w",   # step toward an adjacent tile
+    "move_n", "move_s", "move_e", "move_w",   # step toward an adjacent cardinal tile
+    # diagonal steps — SPD allows 8-way movement, and kiting a boss around a wall
+    # corner needs them; each also attacks a foe standing on that diagonal cell
+    "move_ne", "move_nw", "move_se", "move_sw",
     "attack_nearest",                          # melee the nearest visible enemy
     # target SELECTION: melee the 2nd/3rd/4th nearest visible enemy (the same
     # enemy1/2/3 the observation lists) — kill-priority is the agent's to learn,
