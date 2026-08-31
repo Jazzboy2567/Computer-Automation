@@ -175,6 +175,15 @@ def main() -> int:
                 _show(obs, info, turn)
                 action = _prompt()
                 if action == "__quit__":
+                    # safety net: never discard a run that already beat Goo
+                    if traj and reached >= 6:
+                        demos.extend(traj); joblib.dump(demos, DEMO_FILE)
+                        print(f"  Saved your win before quitting ({len(traj)} transitions; "
+                              f"{len(demos)} total in {DEMO_FILE.name}).")
+                    elif traj:
+                        if input("  Save this unfinished run as a demo? (y/N): ").strip().lower() == "y":
+                            demos.extend(traj); joblib.dump(demos, DEMO_FILE)
+                            print(f"  Saved ({len(demos)} total).")
                     quit_all = True; break
                 if action == "__restart__":
                     print("  -- restarting episode (not saved) --"); break
@@ -187,7 +196,12 @@ def main() -> int:
                              "next_obs": obs, "done": bool(done)})
                 reached = max(reached, int(obs.get("depth", args.floor)))
                 if float(prev.get("boss_hp_frac", 0) or 0) > 0 and float(obs.get("boss_hp_frac", 0) or 0) == 0:
-                    print("  *** Goo down! ***")
+                    print("  *** Goo down! Now take the stairs DOWN (descend) to lock in the win. ***")
+                if reached >= 6 and not done:
+                    # reaching floor 6 == Goo is dead == a win; end the episode here so
+                    # it saves cleanly (no need to play on / no risk of losing it to quit)
+                    print("  *** YOU BEAT GOO — reached floor 6! Ending the run as a WIN. ***")
+                    done = True
             if quit_all:
                 break
             if done:
