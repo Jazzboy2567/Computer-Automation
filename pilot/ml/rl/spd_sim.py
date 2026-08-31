@@ -236,9 +236,10 @@ def sim_env_factory(seed: int, max_steps: int = 150) -> "SPDGridEnv":
 
 
 # The egocentric map window (rlbridge Observations.MAP_*): one bitmask per tile,
-# 10 channels. The DQN needs it unpacked into 0/1 planes — a categorical bitmask
-# fed raw would imply false ordinality between terrain types.
-_MAP_CHANNELS = 10
+# 11 channels (0 unknown,1 wall,2 water,3 hazard,4 door,5 exit,6 short-grass,7 enemy,
+# 8 unaware,9 loot,10 tall-grass). The DQN needs it unpacked into 0/1 planes — a
+# categorical bitmask fed raw would imply false ordinality between terrain types.
+_MAP_CHANNELS = 11
 
 
 def spd_map_featurizer(obs: Observation) -> Observation:

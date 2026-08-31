@@ -71,8 +71,10 @@ def _minimap(obs: dict) -> str:
             return "X"          # chasm / trap
         if b & (1 << 5):
             return ">"          # down-stairs
+        if b & (1 << 10):
+            return '"'          # TALL grass — blocks vision, gives stealth (sneak Goo)
         if b & (1 << 6):
-            return '"'          # tall grass
+            return ","          # short grass — passable, does NOT block vision
         if b & (1 << 0):
             return " "          # never seen (fog)
         return "."              # seen floor
@@ -82,7 +84,7 @@ def _minimap(obs: dict) -> str:
         cells = [sym(int(bits[dy * n + dx]), dy == _MAP_R and dx == _MAP_R) for dx in range(n)]
         rows.append("    " + " ".join(cells))
     legend = ('    @ you   . floor   # wall   ~ water   + door   X hazard   > stairs   '
-              '" grass   G/g enemy   $ loot   (blank = unseen)')
+              '" tall-grass(blocks sight)   , short-grass   G/g enemy   $ loot   (blank = unseen)')
     return "  Nearby tiles (you are @, north is up):\n" + "\n".join(rows) + "\n" + legend
 
 
