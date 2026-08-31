@@ -60,12 +60,13 @@ def _minimap(obs: dict) -> str:
             return "g"          # sleeping/wandering enemy
         if b & (1 << 9):
             return "$"          # loot
+        if b & (1 << 4):
+            return "+"          # door — BEFORE wall: a closed door is solid (wall bit
+                                #   set too), but it's a passable chokepoint, not a wall
         if b & (1 << 1):
             return "#"          # wall (kite Goo's charge around these)
         if b & (1 << 2):
             return "~"          # water (Goo's ooze / the debuff wash off here)
-        if b & (1 << 4):
-            return "+"          # door (chokepoint)
         if b & (1 << 3):
             return "X"          # chasm / trap
         if b & (1 << 5):
@@ -172,6 +173,8 @@ def main() -> int:
                     print("  -- restarting episode (not saved) --"); break
                 prev = obs
                 obs, done, info = env.step(action)
+                for msg in info.get("log", []):
+                    print(f"    > {msg}")                # game log: Goo charging, woke up, ...
                 reward = REWARD.compute(prev, obs, done, info)
                 traj.append({"obs": prev, "action": action, "reward": float(reward),
                              "next_obs": obs, "done": bool(done)})

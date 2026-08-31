@@ -34,7 +34,7 @@ DEFAULT_CLONE = Path.home() / "shattered-pixel-dungeon"
 UNKNOWN_STAIRS_DIST = 30.0
 
 # Reported by the server but not part of the agent's observation.
-_INFO_FIELDS = ("done", "turns", "pos", "gear")
+_INFO_FIELDS = ("done", "turns", "pos", "gear", "log")
 
 
 def clone_dir() -> Path:
@@ -232,7 +232,8 @@ class SPDRealEnv(GameEnv):
         obs = self._augment_boss(self._to_obs(reply))
         done = bool(reply.get("done")) or self.steps >= self.max_steps
         info = {"depth": obs.get("depth", 1.0), "turns": reply.get("turns", 0),
-                "won": bool(obs.get("won", 0.0)), "gear": reply.get("gear", "")}
+                "won": bool(obs.get("won", 0.0)), "gear": reply.get("gear", ""),
+                "log": reply.get("log", [])}
         depth = int(obs.get("depth", 1))
         # only count floors reached from a real floor-1 start — a curriculum
         # episode that BEGINS on floor 4 hasn't achieved floor 4
