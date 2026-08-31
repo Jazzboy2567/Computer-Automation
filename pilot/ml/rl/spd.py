@@ -259,8 +259,14 @@ def spd_training_reward() -> RewardSpec:
         # pays ~+1.6, clearly out-valuing the counter-hit, so attacking is net-POSITIVE
         # every turn — now 1-step TD can learn it greedily without needing to credit the
         # far-off kill. Still symmetric (heal costs the same) so it stays un-farmable.
-        RewardRule(field="boss_hp_frac", direction="down", weight=16.0, per_unit=True),
-        RewardRule(field="boss_hp_frac", direction="up", weight=-16.0, per_unit=True),
+        # WEIGHT 20 (raised again from 16, 2026-08-31): at 16 the fight was a coin flip —
+        # some runs found a fighter (Goo to ~13%, a few kills), others collapsed entirely
+        # to an avoid/no-op basin (use_item spam, Goo untouched, bossKill 0% for 40
+        # intervals). Pushing damage higher makes attacking dominate the safe no-op more
+        # decisively, biasing the run away from the avoidance basin. Symmetric => still
+        # un-farmable. If bossKill still stays ~0, reward shaping is out of road.
+        RewardRule(field="boss_hp_frac", direction="down", weight=20.0, per_unit=True),
+        RewardRule(field="boss_hp_frac", direction="up", weight=-20.0, per_unit=True),
         # SURVIVE THE PUMP-UP (Matthew's survival tweak, 2026-08-28). The bigger damage
         # reward got the agent to ATTACK Goo (untouched -> ~40% HP) but it dies before
         # finishing (29/30) — it eats Goo's telegraphed pumped hit (3x damage) instead of
