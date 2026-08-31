@@ -187,6 +187,8 @@ def _rl(args) -> int:
                            challenges=challenge_mask(args.challenges),
                            agent_kind=args.agent, curriculum=curriculum,
                            decay_episodes=args.decay, max_steps=args.max_steps,
+                           demos_path=_Path(args.demos) if args.demos else None,
+                           demo_frac=args.demo_frac,
                            on_interval=_report_interval)
             return 0
         result, ws = run_spd_real_training(
@@ -267,6 +269,13 @@ def main(argv: list[str] | None = None) -> int:
                       help="start some TRAINING episodes on floors 2..MAXFLOOR so the "
                            "agent experiences where gear/talents matter (spd-real only); "
                            "evaluation always starts on floor 1")
+    p_rl.add_argument("--demos", default=None, metavar="FILE",
+                      help="expert-demonstration file (from play_goo.py) to seed into the "
+                           "replay buffer — a share of every batch trains on it (DQfD); "
+                           "the lever for content exploration can't crack, e.g. bosses "
+                           "(spd-real --forever only)")
+    p_rl.add_argument("--demo-frac", type=float, default=0.25, metavar="F",
+                      help="fraction of each training batch drawn from --demos (default 0.25)")
     p_rl.add_argument("--campaign", action="store_true",
                       help="gated curriculum: each class must WIN the base game, then "
                            "challenges 1..9 in order, no jumps (spd-real only)")

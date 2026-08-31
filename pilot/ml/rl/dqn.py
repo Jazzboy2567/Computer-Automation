@@ -211,6 +211,12 @@ class DQNAgent:
         self._max_prio = 1.0
         self._steps = 0
         self._updates = 0
+        # optional EXPERT-DEMONSTRATION store (DQfD-style). Separate from the circular
+        # buffer so a handful of demos keep teaching even as the buffer turns over ~8x
+        # per interval; a fraction of every training batch is drawn from here. Off (None)
+        # unless seed_demos() is called, so normal runs are unaffected.
+        self._demo: Optional[dict] = None
+        self._demo_frac = 0.0
         # a worker in the multiprocessing trainer acts on the learner's synced
         # scale read-only, so it must not drift its own running-max normalisation
         self._freeze_scale = False
@@ -343,6 +349,36 @@ class DQNAgent:
         if self._steps % self.learn_every == 0:
             self.train_step()
 
+    def seed_demos(self, transitions, featurizer=None, demo_frac: float = 0.25) -> int:
+        """Load expert demonstrations into the demo store (DQfD-style). Each of
+        `transitions` is a dict with raw obs/action/reward/next_obs/done; `featurizer`
+        maps a raw obs to the agent's feature dict (spd_map_featurizer). A `demo_frac`
+        share of every training batch is then drawn from these, so they keep teaching as
+        the main buffer turns over. Returns the number of demo transitions loaded.
+
+        Featurizing here also locks the feature schema/scale and builds the net, so seed
+        BEFORE training; the demos define the same observation space the agent will see.
+        """
+        feat = featurizer or (lambda o: o)
+        obs_l, nobs_l, act_l, rew_l, done_l = [], [], [], [], []
+        for t in transitions:
+            if t["action"] not in self.actions:
+                continue                                  # skip anything not in the action set
+            obs_l.append(self._vec(feat(t["obs"])))
+            nobs_l.append(self._vec(feat(t["next_obs"])))
+            act_l.append(self.actions.index(t["action"]))
+            rew_l.append(float(t["reward"]))
+            done_l.append(bool(t["done"]))
+        if not obs_l:
+            return 0
+        self._demo = {
+            "obs": np.asarray(obs_l, np.float32), "nobs": np.asarray(nobs_l, np.float32),
+            "act": np.asarray(act_l, np.int64), "rew": np.asarray(rew_l, np.float32),
+            "done": np.asarray(done_l, bool), "n": len(obs_l),
+        }
+        self._demo_frac = max(0.0, float(demo_frac))
+        return len(obs_l)
+
     def train_step(self) -> None:
         """One gradient update sampled from the replay buffer (no new experience).
         Separated from `learn` so the multiprocessing learner can train at its own
@@ -363,6 +399,19 @@ class DQNAgent:
         xs, acts = self._obs_buf[idx], self._act_buf[idx]
         rews, nxts, dones = self._rew_buf[idx], self._nobs_buf[idx], self._done_buf[idx]
 
+        # DQfD: mix a share of EXPERT DEMOS into the batch (weight 1.0). Appended after
+        # the k main rows so priority bookkeeping below only touches the main buffer.
+        if self._demo is not None and self._demo_frac > 0.0 and self._demo["n"] > 0:
+            dk = max(1, int(round(self._demo_frac * k)))
+            didx = self._nprng.choice(self._demo["n"], dk, replace=self._demo["n"] < dk)
+            xs = np.concatenate([xs, self._demo["obs"][didx]])
+            acts = np.concatenate([acts, self._demo["act"][didx]])
+            rews = np.concatenate([rews, self._demo["rew"][didx]])
+            nxts = np.concatenate([nxts, self._demo["nobs"][didx]])
+            dones = np.concatenate([dones, self._demo["done"][didx]])
+            weights = np.concatenate([weights, np.ones(dk, np.float32)])
+        m = len(xs)                                       # true batch size (main + demos)
+
         # Double DQN: the ONLINE net selects the next action, the TARGET net
         # evaluates it. Vanilla `max` over the target net systematically
         # overestimates action values, which here let the policy collapse onto a
@@ -376,19 +425,20 @@ class DQNAgent:
         else:
             next_acts = self._net.forward(nxts)[0].argmax(1)
             q_next, _ = self._target.forward(nxts)
-            q_next_sel = q_next[np.arange(k), next_acts]
+            q_next_sel = q_next[np.arange(m), next_acts]
             targets = rews + np.where(dones, 0.0, self.gamma * q_next_sel)
 
             q, cache = self._net.forward(xs)
-            ar = np.arange(k)
+            ar = np.arange(m)
             td_raw = q[ar, acts] - targets
             dq = np.zeros_like(q)
             # clipped TD error (Huber-style gradient) x IS weight, for stability
-            dq[ar, acts] = (np.clip(td_raw, -1.0, 1.0) * weights) / k
+            dq[ar, acts] = (np.clip(td_raw, -1.0, 1.0) * weights) / m
             self._net.backward_step(cache, dq, self.lr)
 
-        # the fresh |TD error| becomes each transition's new priority (both backends)
-        self._prio_buf[idx] = np.abs(td_raw) + self.prio_eps
+        # the fresh |TD error| becomes each transition's new priority — only for the k
+        # MAIN-buffer rows (the demo rows appended after them aren't in the buffer)
+        self._prio_buf[idx] = np.abs(td_raw[:k]) + self.prio_eps
         self._max_prio = max(self._max_prio, float(self._prio_buf[idx].max()))
 
         self._updates += 1

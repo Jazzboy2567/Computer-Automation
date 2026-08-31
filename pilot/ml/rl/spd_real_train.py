@@ -264,6 +264,8 @@ def run_continuous(
     agent_kind: str = "dqn",
     curriculum: Any = None,
     decay_episodes: int = 40000,
+    demos_path: Optional[Path] = None,   # expert-demo file to seed (DQfD), or None
+    demo_frac: float = 0.25,             # share of each training batch drawn from demos
     on_interval: Optional[Callable[[dict], None]] = None,
 ):
     """Train ONE agent indefinitely, reporting every `interval` episodes.
@@ -283,6 +285,15 @@ def run_continuous(
     train_reward = spd_training_reward()
     agent, feat = make_agent(agent_kind, SPDRealEnv.action_space, seed)
     kw = {"max_steps": max_steps, "hero": hero, "challenges": challenges}
+
+    # DQfD: seed expert demonstrations so a fraction of every batch trains on them.
+    # This is the lever for the Goo wall the agent can't cross by exploration alone —
+    # it learns from a human expert's winning fights instead of rediscovering them.
+    if demos_path is not None and Path(demos_path).exists() and hasattr(agent, "seed_demos"):
+        demos = joblib.load(demos_path)
+        n_seeded = agent.seed_demos(demos, featurizer=feat, demo_frac=demo_frac)
+        print(f"seeded {n_seeded} expert demo transitions from {demos_path} "
+              f"(demo_frac={demo_frac})", flush=True)
 
     def eps_at(e: int) -> float:
         return max(0.05, 1.0 - (1.0 - 0.05) * e / max(1, decay_episodes))
