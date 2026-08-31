@@ -80,8 +80,8 @@ def _minimap(obs: dict) -> str:
     for dy in range(n):
         cells = [sym(int(bits[dy * n + dx]), dy == _MAP_R and dx == _MAP_R) for dx in range(n)]
         rows.append("    " + " ".join(cells))
-    legend = ('    @you  G Goo  # wall  ~ water  + door  X hazard  > stairs  '
-              '" grass  $ loot  (blank = unseen)')
+    legend = ('    @ you   . floor   # wall   ~ water   + door   X hazard   > stairs   '
+              '" grass   G/g enemy   $ loot   (blank = unseen)')
     return "  Nearby tiles (you are @, north is up):\n" + "\n".join(rows) + "\n" + legend
 
 
