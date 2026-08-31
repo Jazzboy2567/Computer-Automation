@@ -33,6 +33,35 @@ def test_trains_on_sim_env_via_generic_loop():
     assert len(curve) >= 1 and agent.states_learned > 0
 
 
+def test_seed_demos_are_mixed_into_training_and_learned_from():
+    """Expert demos alone (no other experience) must be enough to move the policy —
+    proving the demo store is actually mixed into training batches (DQfD)."""
+    agent = DQNAgent(["left", "right"], seed=0, warmup=4, learn_every=1, batch_size=8)
+    # demonstrations: in ctx 1 the expert always went right (+1), in ctx 0 left (+1)
+    demos = []
+    for c in (0.0, 1.0):
+        good = "right" if c else "left"
+        demos.append({"obs": {"ctx": c}, "action": good, "reward": 1.0,
+                      "next_obs": {"ctx": c}, "done": True})
+    n = agent.seed_demos(demos * 20, featurizer=lambda o: o, demo_frac=1.0)
+    assert n == 40
+    # only ever store a NEUTRAL, uninformative transition in the main buffer, so any
+    # learning about ctx->action can ONLY come from the mixed-in demos
+    for _ in range(400):
+        agent.learn({"ctx": 0.5}, "left", 0.0, {"ctx": 0.5}, True)
+    hits = sum(agent.policy({"ctx": c}) == ("right" if c else "left") for c in (0.0, 1.0))
+    assert hits == 2, "policy did not learn the demonstrated ctx->action mapping"
+
+
+def test_seed_demos_off_by_default_leaves_training_unchanged():
+    # without seed_demos, the demo store is None and train_step is the original path
+    a = DQNAgent(["a", "b"], seed=0, warmup=2, batch_size=4)
+    assert a._demo is None
+    for i in range(20):
+        a.learn({"x": float(i % 2)}, "a" if i % 2 else "b", 1.0, {"x": float(i % 2)}, True)
+    assert a.states_learned > 0            # trains normally, no demos involved
+
+
 def test_snapshot_roundtrip():
     agent = DQNAgent(["a", "b"], seed=0, warmup=8, learn_every=1)
     for i in range(64):
