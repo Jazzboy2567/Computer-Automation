@@ -25,6 +25,15 @@ $ErrorActionPreference = 'Stop'
 $proj = $PSScriptRoot
 $mask = [IntPtr]([int]([int64](($Cores | ForEach-Object { 1 -shl $_ }) -join '+' | Invoke-Expression)))
 
+# Single-threaded BLAS. numpy's multithreaded BLAS (OpenBLAS) spin-waits to sync its
+# worker threads; once we pin this process to a few cores, those spinning threads
+# livelock on the shared cores — the worker burns CPU on thread-sync and never steps
+# the env (the "hang"). Our net is tiny, so 1 thread is just as fast and removes the spin.
+$env:OPENBLAS_NUM_THREADS = '1'
+$env:OMP_NUM_THREADS = '1'
+$env:MKL_NUM_THREADS = '1'
+$env:NUMEXPR_NUM_THREADS = '1'
+
 $env:PILOT_SEED_ACQ_KIT_PROB = '1.0'   # gear-up materials on floor 1
 $env:PILOT_DENSE_MAP = '1'             # dense tile map (matches the demos)
 $env:PILOT_DQN_BUFFER = '15000'        # smaller replay buffer: the dense map makes obs
