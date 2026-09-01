@@ -180,7 +180,13 @@ def make_agent(kind: str, actions: list[str], seed: int = 0):
         # Defaults keep the dependency-free CPU path (numpy, hidden 128) unchanged.
         backend = os.environ.get("PILOT_DQN_BACKEND", "numpy")
         hidden = int(os.environ.get("PILOT_DQN_HIDDEN", "128"))
-        return DQNAgent(actions, seed=seed, hidden=hidden, backend=backend), spd_map_featurizer
+        # Replay-buffer size is memory-tunable. The dense tile map makes each obs ~1014
+        # floats, so the default 50k buffer is ~400MB (obs+next_obs); on a RAM-tight
+        # machine that plus the JVMs swaps, and numpy's forward pass then crawls (the
+        # run "hangs"). PILOT_DQN_BUFFER lets a dense-map run use a smaller buffer.
+        buffer = int(os.environ.get("PILOT_DQN_BUFFER", "50000"))
+        return DQNAgent(actions, seed=seed, hidden=hidden, backend=backend,
+                        buffer_size=buffer), spd_map_featurizer
     return QLearningAgent(actions, seed=seed), spd_featurizer
 
 

@@ -11,9 +11,12 @@
 #   ? { $_.CommandLine -match 'pilot rl' } | % { Stop-Process -Id $_.ProcessId -Force }
 
 param(
-  # logical CPUs to confine training to. Default = 4 efficiency cores on a Core Ultra
-  # 155H (22 logical CPUs; 16-19 are E-cores). Adjust if your CPU layout differs.
-  [int[]] $Cores = @(16,17,18,19),
+  # logical CPUs to confine training to. Default = ALL 8 efficiency-core threads on a
+  # Core Ultra 155H (12-19). Pinning python AND the java EnvServers to only 4 shared
+  # cores starved them into a livelock (python spun, JVMs couldn't answer, 0 progress),
+  # so give the whole tree the full E-core block — still off the P-cores your foreground
+  # apps use, but with enough headroom to actually run. Adjust if your CPU layout differs.
+  [int[]] $Cores = @(12,13,14,15,16,17,18,19),
   [string] $Log  = 'spd_goo_demo2.log',
   [string] $Err  = 'spd_goo_demo2.err'
 )
@@ -24,6 +27,10 @@ $mask = [IntPtr]([int]([int64](($Cores | ForEach-Object { 1 -shl $_ }) -join '+'
 
 $env:PILOT_SEED_ACQ_KIT_PROB = '1.0'   # gear-up materials on floor 1
 $env:PILOT_DENSE_MAP = '1'             # dense tile map (matches the demos)
+$env:PILOT_DQN_BUFFER = '15000'        # smaller replay buffer: the dense map makes obs
+                                       # ~1014 floats, so 50k would be ~400MB and swap on
+                                       # a RAM-tight machine (-> the forward pass crawls).
+                                       # 15k ~= 120MB, still ample with demos always seeded.
 
 $p = Start-Process -FilePath "$proj\.venv\Scripts\python.exe" `
   -ArgumentList '-m','pilot','rl','--game','spd-real','--agent','dqn',
