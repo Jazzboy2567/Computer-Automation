@@ -187,8 +187,9 @@ def _rl(args) -> int:
                            challenges=challenge_mask(args.challenges),
                            agent_kind=args.agent, curriculum=curriculum,
                            decay_episodes=args.decay, max_steps=args.max_steps,
+                           seed=args.seed,
                            demos_path=_Path(args.demos) if args.demos else None,
-                           demo_frac=args.demo_frac,
+                           demo_frac=args.demo_frac, fixed_seed=args.fixed_seed,
                            on_interval=_report_interval)
             return 0
         result, ws = run_spd_real_training(
@@ -276,6 +277,12 @@ def main(argv: list[str] | None = None) -> int:
                            "(spd-real --forever only)")
     p_rl.add_argument("--demo-frac", type=float, default=0.25, metavar="F",
                       help="fraction of each training batch drawn from --demos (default 0.25)")
+    p_rl.add_argument("--seed", type=int, default=0, metavar="N",
+                      help="base RNG/dungeon seed for the continuous run (spd-real --forever)")
+    p_rl.add_argument("--fixed-seed", action="store_true",
+                      help="pin ONE dungeon: every train/boss episode is the same floor-5 "
+                           "Goo fight, for heavy focused practice + on-distribution demo "
+                           "imitation (spd-real --forever; pair with --seed and --demos)")
     p_rl.add_argument("--campaign", action="store_true",
                       help="gated curriculum: each class must WIN the base game, then "
                            "challenges 1..9 in order, no jumps (spd-real only)")

@@ -95,10 +95,16 @@ class SPDRealEnv(GameEnv):
     HEROES = ("warrior", "mage", "rogue", "huntress", "duelist", "cleric")
 
     def __init__(self, seed: int = 0, max_steps: int = 600, proc: Any = None,
-                 hero: str = "warrior", challenges: int = 0, curriculum: Any = None):
+                 hero: str = "warrior", challenges: int = 0, curriculum: Any = None,
+                 fixed_seed: bool = False):
         if hero not in self.HEROES:
             raise ValueError(f"unknown hero {hero!r}; one of {self.HEROES}")
         self.base_seed = seed
+        # fixed_seed: every reset() uses the SAME seed, so the agent practices ONE
+        # dungeon repeatedly (e.g. a specific Goo fight) instead of a fresh one each
+        # time. Pairs with a fixed startDepth to pin an exact scenario for heavy,
+        # focused training / on-distribution demonstration imitation.
+        self.fixed_seed = fixed_seed
         self.max_steps = max_steps
         self.hero = hero
         self.challenges = challenges          # SPD challenge bitmask
@@ -220,8 +226,9 @@ class SPDRealEnv(GameEnv):
         if self.curriculum is not None:
             depth = max(1, int(self.curriculum(self.episode)))
         self.start_depth = depth
+        reset_seed = self.base_seed if self.fixed_seed else self.base_seed + self.episode
         reply = self._send(
-            f"reset {self.base_seed + self.episode} {self.hero} {self.challenges} {depth}"
+            f"reset {reset_seed} {self.hero} {self.challenges} {depth}"
         )
         self.episode += 1
         return self._augment_boss(self._to_obs(reply))

@@ -272,6 +272,9 @@ def run_continuous(
     decay_episodes: int = 40000,
     demos_path: Optional[Path] = None,   # expert-demo file to seed (DQfD), or None
     demo_frac: float = 0.25,             # share of each training batch drawn from demos
+    fixed_seed: bool = False,            # pin ONE dungeon: every train/boss episode is the
+                                         # same floor-5 Goo fight (heavy focused practice +
+                                         # on-distribution demo imitation)
     on_interval: Optional[Callable[[dict], None]] = None,
 ):
     """Train ONE agent indefinitely, reporting every `interval` episodes.
@@ -304,11 +307,16 @@ def run_continuous(
     def eps_at(e: int) -> float:
         return max(0.05, 1.0 - (1.0 - 0.05) * e / max(1, decay_episodes))
 
-    train_env = SPDRealEnv(seed=seed, curriculum=curriculum, **kw)
+    if fixed_seed:
+        curriculum = lambda ep: 5        # every training episode is the pinned Goo fight
+    train_env = SPDRealEnv(seed=seed, curriculum=curriculum, fixed_seed=fixed_seed, **kw)
     eval_env = SPDRealEnv(seed=_EVAL_SEED, **kw)
     # boss-fight eval: floor-5 starts (granted gear) so it directly measures beat-Goo,
     # which the floor-1 eval almost never reaches. Lets policy_best keep the best FIGHTER.
-    boss_env = SPDRealEnv(seed=_BOSS_EVAL_SEED, curriculum=lambda ep: 5, **kw)
+    # Under fixed_seed, use the SAME dungeon the agent trains on, so bossKill% reads
+    # "does it beat the pinned Goo" directly.
+    boss_env = SPDRealEnv(seed=(seed if fixed_seed else _BOSS_EVAL_SEED),
+                          curriculum=lambda ep: 5, fixed_seed=fixed_seed, **kw)
     # random baseline is constant — measure it once
     rng = random.Random(7)
     rr, sr, dr, _, _ = _evaluate(eval_env, lambda o: rng.choice(SPDRealEnv.action_space),
@@ -352,9 +360,12 @@ def run_continuous(
                 if consecutive_crashes >= 8:
                     print("[continuous] 8 consecutive env crashes — aborting to avoid a spin loop", flush=True)
                     break
-                train_env = SPDRealEnv(seed=seed + 100_000 * env_restarts, curriculum=curriculum, **kw)
+                # under fixed_seed keep the SAME pinned dungeon across restarts
+                rebuild_seed = seed if fixed_seed else seed + 100_000 * env_restarts
+                train_env = SPDRealEnv(seed=rebuild_seed, curriculum=curriculum, fixed_seed=fixed_seed, **kw)
                 eval_env = SPDRealEnv(seed=_EVAL_SEED, **kw)
-                boss_env = SPDRealEnv(seed=_BOSS_EVAL_SEED, curriculum=lambda ep: 5, **kw)
+                boss_env = SPDRealEnv(seed=(seed if fixed_seed else _BOSS_EVAL_SEED),
+                                      curriculum=lambda ep: 5, fixed_seed=fixed_seed, **kw)
                 eval_env.best_depth, eval_env.best_gear = 0, ""
                 k -= 1                                # this interval didn't complete
                 continue
