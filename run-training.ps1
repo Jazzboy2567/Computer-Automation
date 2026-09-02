@@ -17,8 +17,8 @@ param(
   # so give the whole tree the full E-core block — still off the P-cores your foreground
   # apps use, but with enough headroom to actually run. Adjust if your CPU layout differs.
   [int[]] $Cores = @(12,13,14,15,16,17,18,19),
-  [string] $Log  = 'spd_proven.log',
-  [string] $Err  = 'spd_proven.err'
+  [string] $Log  = 'spd_fixedgoo.log',
+  [string] $Err  = 'spd_fixedgoo.err'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,18 +34,21 @@ $env:OMP_NUM_THREADS = '1'
 $env:MKL_NUM_THREADS = '1'
 $env:NUMEXPR_NUM_THREADS = '1'
 
-$env:PILOT_SEED_ACQ_KIT_PROB = '1.0'   # gear-up materials on floor 1
-# PROVEN CONFIG: focused encoding (NO dense map) + boss-fight reward, no demos. The
-# dense-map + single-demo path was both too slow (~2.4h/interval capped) and didn't
-# learn (data-hungry 891-feature input; one demo destabilised). The focused encoding
-# learns fast (~min/interval) and now benefits from the descent/key/seal bug fixes, so
-# its Goo kills can finally reach floor 6. (Re-enable the dense map + --demos only with
-# a RICHER, focused-encoding demo set if we revisit demonstration seeding.)
+$env:PILOT_SEED_ACQ_KIT_PROB = '1.0'   # gear-up materials
+$env:PILOT_DENSE_MAP = '1'             # dense tile map (matches Matthew's demo encoding)
+$env:PILOT_DQN_BUFFER = '10000'        # small buffer: one pinned dungeon needs little, and
+                                       # the dense map makes obs ~1014 floats (RAM-tight)
+# FIXED-GOO CONFIG (Matthew's plan): pin the EXACT dungeon his demo came from (seed
+# 20260831, floor 5) and train heavily on that one Goo fight, mixing his win in every
+# batch. Now the demo is perfectly on-distribution (same fight), which is what the earlier
+# floor-1..5 demo run lacked. bossKill% reads "does it beat the pinned Goo it practices on".
 
 $p = Start-Process -FilePath "$proj\.venv\Scripts\python.exe" `
   -ArgumentList '-m','pilot','rl','--game','spd-real','--agent','dqn',
                 '--episodes','4000','--curriculum','5','--decay','30000',
-                '--max-steps','300','--forever' `
+                '--max-steps','300','--forever',
+                '--seed','20260831','--fixed-seed',
+                '--demos','goo_demos.joblib','--demo-frac','0.25' `
   -WorkingDirectory $proj `
   -RedirectStandardOutput "$proj\$Log" -RedirectStandardError "$proj\$Err" `
   -WindowStyle Hidden -PassThru
