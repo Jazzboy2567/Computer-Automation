@@ -44,7 +44,7 @@ $env:PILOT_DQN_BUFFER = '15000'        # smaller replay buffer: the dense map ma
 $p = Start-Process -FilePath "$proj\.venv\Scripts\python.exe" `
   -ArgumentList '-m','pilot','rl','--game','spd-real','--agent','dqn',
                 '--episodes','4000','--curriculum','5','--decay','30000',
-                '--max-steps','300','--forever','--demos','goo_demos.joblib','--demo-frac','0.25' `
+                '--max-steps','300','--forever','--demos','goo_demos.joblib','--demo-frac','0.05' `
   -WorkingDirectory $proj `
   -RedirectStandardOutput "$proj\$Log" -RedirectStandardError "$proj\$Err" `
   -WindowStyle Hidden -PassThru
