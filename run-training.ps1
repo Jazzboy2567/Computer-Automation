@@ -17,8 +17,8 @@ param(
   # so give the whole tree the full E-core block — still off the P-cores your foreground
   # apps use, but with enough headroom to actually run. Adjust if your CPU layout differs.
   [int[]] $Cores = @(12,13,14,15,16,17,18,19),
-  [string] $Log  = 'spd_goo_demo2.log',
-  [string] $Err  = 'spd_goo_demo2.err'
+  [string] $Log  = 'spd_proven.log',
+  [string] $Err  = 'spd_proven.err'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,16 +35,17 @@ $env:MKL_NUM_THREADS = '1'
 $env:NUMEXPR_NUM_THREADS = '1'
 
 $env:PILOT_SEED_ACQ_KIT_PROB = '1.0'   # gear-up materials on floor 1
-$env:PILOT_DENSE_MAP = '1'             # dense tile map (matches the demos)
-$env:PILOT_DQN_BUFFER = '15000'        # smaller replay buffer: the dense map makes obs
-                                       # ~1014 floats, so 50k would be ~400MB and swap on
-                                       # a RAM-tight machine (-> the forward pass crawls).
-                                       # 15k ~= 120MB, still ample with demos always seeded.
+# PROVEN CONFIG: focused encoding (NO dense map) + boss-fight reward, no demos. The
+# dense-map + single-demo path was both too slow (~2.4h/interval capped) and didn't
+# learn (data-hungry 891-feature input; one demo destabilised). The focused encoding
+# learns fast (~min/interval) and now benefits from the descent/key/seal bug fixes, so
+# its Goo kills can finally reach floor 6. (Re-enable the dense map + --demos only with
+# a RICHER, focused-encoding demo set if we revisit demonstration seeding.)
 
 $p = Start-Process -FilePath "$proj\.venv\Scripts\python.exe" `
   -ArgumentList '-m','pilot','rl','--game','spd-real','--agent','dqn',
                 '--episodes','4000','--curriculum','5','--decay','30000',
-                '--max-steps','300','--forever','--demos','goo_demos.joblib','--demo-frac','0.05' `
+                '--max-steps','300','--forever' `
   -WorkingDirectory $proj `
   -RedirectStandardOutput "$proj\$Log" -RedirectStandardError "$proj\$Err" `
   -WindowStyle Hidden -PassThru
