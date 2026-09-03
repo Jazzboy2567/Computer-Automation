@@ -17,8 +17,8 @@ param(
   # so give the whole tree the full E-core block — still off the P-cores your foreground
   # apps use, but with enough headroom to actually run. Adjust if your CPU layout differs.
   [int[]] $Cores = @(12,13,14,15,16,17,18,19),
-  [string] $Log  = 'spd_fixedgoo.log',
-  [string] $Err  = 'spd_fixedgoo.err'
+  [string] $Log  = 'spd_proven.log',
+  [string] $Err  = 'spd_proven.err'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,20 +35,18 @@ $env:MKL_NUM_THREADS = '1'
 $env:NUMEXPR_NUM_THREADS = '1'
 
 $env:PILOT_SEED_ACQ_KIT_PROB = '1.0'   # gear-up materials
-$env:PILOT_DENSE_MAP = '1'             # dense tile map (matches Matthew's demo encoding)
-$env:PILOT_DQN_BUFFER = '10000'        # small buffer: one pinned dungeon needs little, and
-                                       # the dense map makes obs ~1014 floats (RAM-tight)
-# FIXED-GOO CONFIG (Matthew's plan): pin the EXACT dungeon his demo came from (seed
-# 20260831, floor 5) and train heavily on that one Goo fight, mixing his win in every
-# batch. Now the demo is perfectly on-distribution (same fight), which is what the earlier
-# floor-1..5 demo run lacked. bossKill% reads "does it beat the pinned Goo it practices on".
+# PROVEN CONFIG (high-water mark): focused encoding, boss-fight reward + attack fallback,
+# NO dense map, NO demos. Every single-demo path (RL-seeding AND behavioral cloning) failed
+# to beat Goo (one trajectory can't teach recovery from deviation), and the dense-map input
+# is too data-hungry for this compute. This config learns fast (~min/interval) and reaches
+# Goo / drives it to ~19% with occasional kills; now that the descent/key/seal bugs are
+# fixed, those kills can count. Reliably beating Goo needs a RICH demo set (15-30 varied
+# wins) or a stronger method — see [[spd-goo-wall-and-success]]. Keeps single-thread BLAS.
 
 $p = Start-Process -FilePath "$proj\.venv\Scripts\python.exe" `
   -ArgumentList '-m','pilot','rl','--game','spd-real','--agent','dqn',
                 '--episodes','4000','--curriculum','5','--decay','30000',
-                '--max-steps','300','--forever',
-                '--seed','20260831','--fixed-seed',
-                '--demos','goo_demos.joblib','--demo-frac','0.25' `
+                '--max-steps','300','--forever' `
   -WorkingDirectory $proj `
   -RedirectStandardOutput "$proj\$Log" -RedirectStandardError "$proj\$Err" `
   -WindowStyle Hidden -PassThru
