@@ -17,8 +17,8 @@ param(
   # so give the whole tree the full E-core block — still off the P-cores your foreground
   # apps use, but with enough headroom to actually run. Adjust if your CPU layout differs.
   [int[]] $Cores = @(12,13,14,15,16,17,18,19),
-  [string] $Log  = 'spd_proven.log',
-  [string] $Err  = 'spd_proven.err'
+  [string] $Log  = 'spd_deep.log',
+  [string] $Err  = 'spd_deep.err'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,8 +45,8 @@ $env:PILOT_SEED_ACQ_KIT_PROB = '1.0'   # gear-up materials
 
 $p = Start-Process -FilePath "$proj\.venv\Scripts\python.exe" `
   -ArgumentList '-m','pilot','rl','--game','spd-real','--agent','dqn',
-                '--episodes','4000','--curriculum','5','--decay','30000',
-                '--max-steps','300','--forever' `
+                '--episodes','4000','--curriculum','10','--decay','40000',
+                '--max-steps','400','--forever' `
   -WorkingDirectory $proj `
   -RedirectStandardOutput "$proj\$Log" -RedirectStandardError "$proj\$Err" `
   -WindowStyle Hidden -PassThru
