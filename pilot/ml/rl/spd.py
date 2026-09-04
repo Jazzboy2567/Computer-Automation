@@ -39,6 +39,7 @@ SPD_OBSERVATION_FIELDS: dict[str, str] = {
     "boss_hp_frac": "visible boss's HP fraction 0..1 (player reads the boss HP bar); 0 when no boss is in view — the reward scores damage dealt / healing during the boss fight",
     "boss_overheal": "1 after >2 consecutive turns of the boss regaining HP (derived in the env); flags the flee-and-let-it-heal stall (2-turn grace for a pump-up dodge)",
     "boss_pending": "1 from first sight of a boss until the hero gets past its floor (derived in the env); the reward taxes each such turn so ignoring the boss and running out the clock is not free (the 'want to battle' pressure)",
+    "dangerR_DIR": "danger ring (R=1,2 x 8 dirs, e.g. danger1_n): 1 if that nearby cell is lethal to stand on — fire/gas/electricity blob, chasm/pit, armed trap, or Tengu's bomb blast — so the agent can route around hazards a wall-only view misses (Tengu's fire walls, floor traps, bombs)",
     "boss_was_charging": "1 if the nearest enemy was telegraphing a heavy attack LAST turn (derived in the env); scales an EXTRA penalty on HP lost this turn, so eating a pump-up hit is costly and the agent learns to dodge the telegraph",
 }
 
